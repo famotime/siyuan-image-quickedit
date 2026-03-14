@@ -3,6 +3,7 @@ import type { IProtyle } from "siyuan";
 import { COMMAND_DEFINITIONS } from "@/core/command-meta.ts";
 import type { CommandId } from "@/core/command-settings.ts";
 import { buildImageInfoLine, buildResultMarkdown } from "@/core/formatters.ts";
+import { replaceImageSourceInMarkdown } from "@/core/image-markdown.ts";
 
 export interface ImageTarget {
   alt: string;
@@ -286,7 +287,7 @@ export function resolveImageTarget(element: HTMLElement): ImageTarget | null {
     blockId,
     displayHeight: rect.height || imageElement.clientHeight || imageElement.naturalHeight || 0,
     displayWidth: rect.width || imageElement.clientWidth || imageElement.naturalWidth || 0,
-    src: imageElement.currentSrc || imageElement.src,
+    src: imageElement.getAttribute("src") || imageElement.currentSrc || imageElement.src,
   };
 }
 
@@ -368,4 +369,8 @@ export function buildProcessedResultMarkdown(prepared: PreparedImageResult, asse
       width: prepared.output.width,
     },
   });
+}
+
+export function buildReplacedBlockMarkdown(blockMarkdown: string, target: ImageTarget, assetPath: string): string {
+  return replaceImageSourceInMarkdown(blockMarkdown, target.src, assetPath);
 }

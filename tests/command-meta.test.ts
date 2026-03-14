@@ -17,3 +17,14 @@ test("single-image menu command labels are available synchronously", () => {
     "压缩到 10%",
   ]);
 });
+
+test("document batch command labels distinguish insert and replace modes", () => {
+  expect(COMMAND_DEFINITIONS["convert-webp"]).toMatchObject({
+    insertBatchLabel: "全部转为 WebP 格式（新增）",
+    replaceBatchLabel: "全部转为 WebP 格式（替换）",
+  });
+  expect(COMMAND_DEFINITIONS["compress-30"]).toMatchObject({
+    insertBatchLabel: "全部压缩到 30%（新增）",
+    replaceBatchLabel: "全部压缩到 30%（替换）",
+  });
+});

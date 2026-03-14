@@ -11,8 +11,13 @@ export type CommandToggleMap = Record<CommandId, boolean>;
 
 export interface PluginSettings {
   imageMenuCommands: CommandToggleMap;
-  documentMenuCommands: CommandToggleMap;
+  documentInsertMenuCommands: CommandToggleMap;
+  documentReplaceMenuCommands: CommandToggleMap;
 }
+
+type LegacyPluginSettings = Partial<PluginSettings> & {
+  documentMenuCommands?: Partial<CommandToggleMap>;
+};
 
 export const DEFAULT_COMMAND_TOGGLES: CommandToggleMap = {
   "convert-webp": true,
@@ -23,18 +28,27 @@ export const DEFAULT_COMMAND_TOGGLES: CommandToggleMap = {
 
 export const DEFAULT_SETTINGS: PluginSettings = {
   imageMenuCommands: { ...DEFAULT_COMMAND_TOGGLES },
-  documentMenuCommands: { ...DEFAULT_COMMAND_TOGGLES },
+  documentInsertMenuCommands: { ...DEFAULT_COMMAND_TOGGLES },
+  documentReplaceMenuCommands: { ...DEFAULT_COMMAND_TOGGLES },
 };
 
-export function mergeSettings(settings?: Partial<PluginSettings> | null): PluginSettings {
+export function mergeSettings(settings?: LegacyPluginSettings | null): PluginSettings {
+  const legacyDocumentMenuCommands = settings?.documentMenuCommands;
+
   return {
     imageMenuCommands: {
       ...DEFAULT_SETTINGS.imageMenuCommands,
       ...settings?.imageMenuCommands,
     },
-    documentMenuCommands: {
-      ...DEFAULT_SETTINGS.documentMenuCommands,
-      ...settings?.documentMenuCommands,
+    documentInsertMenuCommands: {
+      ...DEFAULT_SETTINGS.documentInsertMenuCommands,
+      ...legacyDocumentMenuCommands,
+      ...settings?.documentInsertMenuCommands,
+    },
+    documentReplaceMenuCommands: {
+      ...DEFAULT_SETTINGS.documentReplaceMenuCommands,
+      ...legacyDocumentMenuCommands,
+      ...settings?.documentReplaceMenuCommands,
     },
   };
 }

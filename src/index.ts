@@ -16,10 +16,22 @@ import {
   getEnabledCommandIds,
   mergeSettings,
 } from "@/core/command-settings.ts";
-import { buildImageQuickEditSubmenuItems } from "@/core/menu-items.ts";
-import { runTargetsSequentially } from "@/core/task-runner.ts";
-import { insertMarkdownAfterBlock, uploadAsset } from "@/services/kernel.ts";
+import { buildBatchResultMessage } from "@/core/formatters.ts";
 import {
+  buildDocumentBatchSubmenuItems,
+  buildImageQuickEditSubmenuItems,
+  type DocumentBatchMode,
+} from "@/core/menu-items.ts";
+import { ensurePluginSetting } from "@/core/plugin-setting.ts";
+import { runTargetsSequentially } from "@/core/task-runner.ts";
+import {
+  getBlockMarkdown,
+  insertMarkdownAfterBlock,
+  updateMarkdownBlock,
+  uploadAsset,
+} from "@/services/kernel.ts";
+import {
+  buildReplacedBlockMarkdown,
   buildImageInfoForTarget,
   buildProcessedResultMarkdown,
   collectImageTargets,
@@ -54,6 +66,7 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
 
   async onload() {
     this.settings = mergeSettings(await this.loadData(SETTINGS_STORAGE));
+    ensurePluginSetting(this, Setting, this.createCommandToggleGroup.bind(this));
 
     this.eventBus.on("open-menu-image", this.onImageMenu);
     this.eventBus.on("click-blockicon", this.onBlockIcon);
@@ -72,26 +85,10 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
   }
 
   openSetting() {
-    const setting = new Setting({
-      width: "640px",
-    });
-
-    setting.addItem({
-      createActionElement: () => this.createCommandToggleGroup("imageMenuCommands", false),
-      description: "控制图片右键菜单里展示哪些单图操作。",
-      direction: "column",
-      title: "图片右键菜单",
-    });
-    setting.addItem({
-      createActionElement: () => this.createCommandToggleGroup("documentMenuCommands", true),
-      description: "控制文档标题菜单里展示哪些批量处理命令。",
-      direction: "column",
-      title: "文档批量菜单",
-    });
-    setting.open(this.name);
+    ensurePluginSetting(this, Setting, this.createCommandToggleGroup.bind(this)).open(this.name);
   }
 
-  private createCommandToggleGroup(settingKey: keyof PluginSettings, useBatchLabel: boolean): HTMLElement {
+  private createCommandToggleGroup(settingKey: keyof PluginSettings): HTMLElement {
     const wrapper = document.createElement("div");
     wrapper.className = "image-quickedit-setting-group";
 
@@ -114,9 +111,11 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
       });
 
       const text = document.createElement("span");
-      text.textContent = useBatchLabel
-        ? COMMAND_DEFINITIONS[commandId].batchLabel
-        : COMMAND_DEFINITIONS[commandId].label;
+      text.textContent = settingKey === "documentInsertMenuCommands"
+        ? COMMAND_DEFINITIONS[commandId].insertBatchLabel
+        : settingKey === "documentReplaceMenuCommands"
+          ? COMMAND_DEFINITIONS[commandId].replaceBatchLabel
+          : COMMAND_DEFINITIONS[commandId].label;
 
       label.append(checkbox, text);
       wrapper.append(label);
@@ -196,8 +195,9 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
   }
 
   private decorateDocumentMenu(protyle: IProtyle, menu: IEventBusMap["click-editortitleicon"]["menu"]): void {
-    const enabledCommands = getEnabledCommandIds(this.settings.documentMenuCommands);
-    if (!enabledCommands.length) {
+    const enabledInsertCommands = getEnabledCommandIds(this.settings.documentInsertMenuCommands);
+    const enabledReplaceCommands = getEnabledCommandIds(this.settings.documentReplaceMenuCommands);
+    if (!enabledInsertCommands.length && !enabledReplaceCommands.length) {
       return;
     }
 
@@ -209,18 +209,26 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
     menu.addItem({
       icon: "iconImage",
       label: "图片快剪",
-      submenu: enabledCommands.map(commandId => ({
-        label: COMMAND_DEFINITIONS[commandId].batchLabel,
-        click: () => {
+      submenu: buildDocumentBatchSubmenuItems({
+        insertCommandIds: enabledInsertCommands,
+        replaceCommandIds: enabledReplaceCommands,
+        onCommandClick: (commandId, mode) => {
+          const commandLabel = mode === "replace"
+            ? COMMAND_DEFINITIONS[commandId].replaceBatchLabel
+            : COMMAND_DEFINITIONS[commandId].insertBatchLabel;
+          const detail = mode === "replace"
+            ? "原图将被直接替换，正文文本保持不变。"
+            : "原图不会删除，处理结果会插入到对应图片块后方。";
+
           confirm(
             "思源图片快剪",
-            `将对本文档中的 ${targets.length} 张图片执行“${COMMAND_DEFINITIONS[commandId].batchLabel}”。原图不会删除，处理结果会插入到对应图片块后方。`,
+            `将对本文档中的 ${targets.length} 张图片执行“${commandLabel}”。${detail}`,
             () => {
-              void this.runExclusive(async () => this.processDocumentTargets(targets, commandId));
+              void this.runExclusive(async () => this.processDocumentTargets(targets, commandId, mode));
             },
           );
         },
-      })),
+      }),
     });
   }
 
@@ -245,32 +253,38 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
 
   private async processSingleTarget(target: ImageTarget, commandId: CommandId): Promise<void> {
     try {
-      const result = await this.processAndInsertTarget(target, commandId);
-      showMessage(`${COMMAND_DEFINITIONS[commandId].label}完成：${result}`, 6000, "info");
+      const result = await this.processTarget(target, commandId, "insert");
+      showMessage(`${COMMAND_DEFINITIONS[commandId].label}完成：${result.summary}`, 6000, "info");
     }
     catch (error) {
       showMessage(error instanceof Error ? error.message : String(error), 6000, "error");
     }
   }
 
-  private async processDocumentTargets(targets: ImageTarget[], commandId: CommandId): Promise<void> {
+  private async processDocumentTargets(
+    targets: ImageTarget[],
+    commandId: CommandId,
+    mode: DocumentBatchMode,
+  ): Promise<void> {
     const indexedTargets = targets.map((target, index) => ({
       ...target,
       executionId: `${target.blockId}-${index}`,
     }));
     const targetMap = new Map(indexedTargets.map(target => [target.executionId, target]));
+    const batchCommandLabel = mode === "replace"
+      ? COMMAND_DEFINITIONS[commandId].replaceBatchLabel
+      : COMMAND_DEFINITIONS[commandId].insertBatchLabel;
 
     const result = await runTargetsSequentially({
       commandId,
-      onProgress: message => this.reportProgress(`${COMMAND_DEFINITIONS[commandId].batchLabel}：${message}`),
+      onProgress: message => this.reportProgress(`${batchCommandLabel}：${message}`),
       runTarget: async ({ id }) => {
         const target = targetMap.get(id);
         if (!target) {
           throw new Error(`找不到图片任务：${id}`);
         }
 
-        const summary = await this.processAndInsertTarget(target, commandId);
-        return { summary };
+        return this.processTarget(target, commandId, mode);
       },
       targets: indexedTargets.map((target, index) => ({
         id: target.executionId,
@@ -278,17 +292,33 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
       })),
     });
 
-    const failureSummary = result.failures.length
-      ? `失败 ${result.failures.length}`
-      : "无失败";
+    const savedBytes = result.successes.reduce((total, success) => {
+      return total + Math.max(0, success.originalBytes - success.outputBytes);
+    }, 0);
+    const summaryMessage = buildBatchResultMessage({
+      failureCount: result.failures.length,
+      mode,
+      processedCount: targets.length,
+      savedBytes,
+      successCount: result.successes.length,
+    });
+
     showMessage(
-      `${COMMAND_DEFINITIONS[commandId].batchLabel}完成：成功 ${result.successes.length}，${failureSummary}。`,
+      summaryMessage,
       7000,
       result.failures.length ? "error" : "info",
     );
   }
 
-  private async processAndInsertTarget(target: ImageTarget, commandId: CommandId): Promise<string> {
+  private async processTarget(
+    target: ImageTarget,
+    commandId: CommandId,
+    mode: DocumentBatchMode,
+  ): Promise<{
+    originalBytes: number;
+    outputBytes: number;
+    summary: string;
+  }> {
     this.reportProgress(`${COMMAND_DEFINITIONS[commandId].label}：正在读取图片`);
     const prepared = await prepareProcessedImage(
       target,
@@ -302,10 +332,27 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
     });
     const assetPath = await uploadAsset(file);
 
+    if (mode === "replace") {
+      this.reportProgress(`${COMMAND_DEFINITIONS[commandId].label}：正在替换原图`);
+      const blockMarkdown = await getBlockMarkdown(target.blockId);
+      const updatedMarkdown = buildReplacedBlockMarkdown(blockMarkdown, target, assetPath);
+      await updateMarkdownBlock(target.blockId, updatedMarkdown);
+
+      return {
+        originalBytes: prepared.original.bytes,
+        outputBytes: prepared.output.bytes,
+        summary: `${COMMAND_DEFINITIONS[commandId].label}已直接替换原图`,
+      };
+    }
+
     this.reportProgress(`${COMMAND_DEFINITIONS[commandId].label}：正在插入结果块`);
     const markdown = buildProcessedResultMarkdown(prepared, assetPath);
     await insertMarkdownAfterBlock(target.blockId, markdown);
 
-    return markdown.split("\n", 1)[0];
+    return {
+      originalBytes: prepared.original.bytes,
+      outputBytes: prepared.output.bytes,
+      summary: markdown.split("\n", 1)[0],
+    };
   }
 }

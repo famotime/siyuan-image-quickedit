@@ -41,3 +41,39 @@ test("runTargetsSequentially aggregates success and failure while reporting prog
     },
   ]);
 });
+
+test("runTargetsSequentially preserves per-target summary payloads for batch aggregation", async () => {
+  const result = await runTargetsSequentially({
+    commandId: "compress-50",
+    runTarget: async (target) => {
+      if (target.id === "image-2") {
+        return {
+          originalBytes: 200_000,
+          outputBytes: 120_000,
+        };
+      }
+
+      return {
+        originalBytes: 100_000,
+        outputBytes: 40_000,
+      };
+    },
+    targets: [
+      { id: "image-1", label: "第一张" },
+      { id: "image-2", label: "第二张" },
+    ],
+  });
+
+  expect(result.successes).toEqual([
+    {
+      originalBytes: 100_000,
+      outputBytes: 40_000,
+      targetId: "image-1",
+    },
+    {
+      originalBytes: 200_000,
+      outputBytes: 120_000,
+      targetId: "image-2",
+    },
+  ]);
+});

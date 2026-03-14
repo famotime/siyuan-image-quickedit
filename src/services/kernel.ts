@@ -24,10 +24,26 @@ export async function uploadAsset(file: File): Promise<string> {
   return uploadedPath;
 }
 
+export async function getBlockMarkdown(blockId: string): Promise<string> {
+  const response = await requestApi<IResGetBlockKramdown>("/api/block/getBlockKramdown", {
+    id: blockId,
+  });
+
+  return response.kramdown;
+}
+
 export async function insertMarkdownAfterBlock(blockId: string, markdown: string): Promise<void> {
   await requestApi("/api/block/insertBlock", {
     data: markdown,
     dataType: "markdown",
     previousID: blockId,
+  });
+}
+
+export async function updateMarkdownBlock(blockId: string, markdown: string): Promise<void> {
+  await requestApi("/api/block/updateBlock", {
+    data: markdown,
+    dataType: "markdown",
+    id: blockId,
   });
 }
