@@ -1,0 +1,44 @@
+export const COMMAND_ORDER = [
+  "convert-webp",
+  "compress-50",
+  "compress-30",
+  "compress-10",
+] as const;
+
+export type CommandId = (typeof COMMAND_ORDER)[number];
+
+export type CommandToggleMap = Record<CommandId, boolean>;
+
+export interface PluginSettings {
+  imageMenuCommands: CommandToggleMap;
+  documentMenuCommands: CommandToggleMap;
+}
+
+export const DEFAULT_COMMAND_TOGGLES: CommandToggleMap = {
+  "convert-webp": true,
+  "compress-50": true,
+  "compress-30": true,
+  "compress-10": true,
+};
+
+export const DEFAULT_SETTINGS: PluginSettings = {
+  imageMenuCommands: { ...DEFAULT_COMMAND_TOGGLES },
+  documentMenuCommands: { ...DEFAULT_COMMAND_TOGGLES },
+};
+
+export function mergeSettings(settings?: Partial<PluginSettings> | null): PluginSettings {
+  return {
+    imageMenuCommands: {
+      ...DEFAULT_SETTINGS.imageMenuCommands,
+      ...settings?.imageMenuCommands,
+    },
+    documentMenuCommands: {
+      ...DEFAULT_SETTINGS.documentMenuCommands,
+      ...settings?.documentMenuCommands,
+    },
+  };
+}
+
+export function getEnabledCommandIds(toggleMap: Partial<CommandToggleMap>): CommandId[] {
+  return COMMAND_ORDER.filter(commandId => toggleMap[commandId]);
+}
