@@ -9,6 +9,7 @@ interface BuildImageQuickEditSubmenuItemsOptions {
   commandIds: CommandId[];
   imageInfoLabel: string;
   onCommandClick: (commandId: CommandId) => void;
+  onOpenLocalEditor?: () => void;
 }
 
 interface BuildDocumentBatchSubmenuItemsOptions {
@@ -28,6 +29,17 @@ export function buildImageQuickEditSubmenuItems(
     {
       type: "separator",
     },
+    ...(options.onOpenLocalEditor
+      ? [
+          {
+            click: () => options.onOpenLocalEditor?.(),
+            label: "使用本地编辑器编辑",
+          },
+          {
+            type: "separator" as const,
+          },
+        ]
+      : []),
     ...options.commandIds.map(commandId => ({
       click: () => options.onCommandClick(commandId),
       label: COMMAND_DEFINITIONS[commandId].label,

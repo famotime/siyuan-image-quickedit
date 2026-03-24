@@ -47,3 +47,11 @@ export async function updateMarkdownBlock(blockId: string, markdown: string): Pr
     id: blockId,
   });
 }
+
+export async function updateDomBlock(blockId: string, html: string): Promise<void> {
+  await requestApi("/api/block/updateBlock", {
+    data: html,
+    dataType: "dom",
+    id: blockId,
+  });
+}

@@ -4,6 +4,18 @@
   gap: 8px;
 }
 
+.image-quickedit-setting-path {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.image-quickedit-setting-hint {
+  color: var(--b3-theme-on-surface-light);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .image-quickedit-setting-option {
   display: flex;
   align-items: center;

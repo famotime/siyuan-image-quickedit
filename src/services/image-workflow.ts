@@ -287,7 +287,7 @@ export function resolveImageTarget(element: HTMLElement): ImageTarget | null {
     blockId,
     displayHeight: rect.height || imageElement.clientHeight || imageElement.naturalHeight || 0,
     displayWidth: rect.width || imageElement.clientWidth || imageElement.naturalWidth || 0,
-    src: imageElement.getAttribute("src") || imageElement.currentSrc || imageElement.src,
+    src: imageElement.dataset.src || imageElement.getAttribute("src") || imageElement.currentSrc || imageElement.src,
   };
 }
 

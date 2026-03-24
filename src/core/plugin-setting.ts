@@ -1,4 +1,4 @@
-import type { PluginSettings } from "@/core/command-settings.ts";
+import type { CommandMenuSettingKey } from "@/core/command-settings.ts";
 
 type SettingLike = {
   addItem(item: {
@@ -20,7 +20,8 @@ type SettingHost<TSetting extends SettingLike> = {
 export function ensurePluginSetting<TSetting extends SettingLike>(
   host: SettingHost<TSetting>,
   SettingCtor: SettingConstructor<TSetting>,
-  createCommandToggleGroup: (settingKey: keyof PluginSettings) => HTMLElement,
+  createCommandToggleGroup: (settingKey: CommandMenuSettingKey) => HTMLElement,
+  createLocalEditorPathInput: () => HTMLElement,
 ): TSetting {
   if (host.setting) {
     return host.setting;
@@ -30,6 +31,12 @@ export function ensurePluginSetting<TSetting extends SettingLike>(
     width: "640px",
   });
 
+  setting.addItem({
+    createActionElement: createLocalEditorPathInput,
+    description: "填写本地图片编辑器的可执行文件路径，配置后可直接在图片菜单中调用本地软件编辑。",
+    direction: "column",
+    title: "本地图片编辑",
+  });
   setting.addItem({
     createActionElement: () => createCommandToggleGroup("imageMenuCommands"),
     description: "控制图片右键菜单里展示哪些单图操作。",

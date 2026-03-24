@@ -11,6 +11,7 @@ import { COMMAND_DEFINITIONS } from "@/core/command-meta.ts";
 import {
   COMMAND_ORDER,
   DEFAULT_SETTINGS,
+  type CommandMenuSettingKey,
   type CommandId,
   type PluginSettings,
   getEnabledCommandIds,
@@ -40,13 +41,21 @@ import {
   resolveImageTargetFromBlockElements,
   type ImageTarget,
 } from "@/services/image-workflow.ts";
+import {
+  createEditedImagePreviewUrl,
+  openLocalEditorAndWait,
+  removeCacheBustingSearchParam,
+  resolveLocalEditorImagePath,
+} from "@/services/local-editor.ts";
 import PluginInfo from "@/../plugin.json";
 
 const SETTINGS_STORAGE = "settings.json";
 const PROGRESS_MESSAGE_ID = "siyuan-image-quickedit-progress";
+const LOCAL_EDITOR_REFRESH_DELAY_MS = 200;
 
 export default class SiyuanImageQuickEditPlugin extends Plugin {
   private readonly imageInfoCache = new Map<string, string>();
+  private readonly localEditorPreviewUrls = new Map<HTMLImageElement, string>();
   private isProcessing = false;
   private settings: PluginSettings = DEFAULT_SETTINGS;
 
@@ -66,7 +75,12 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
 
   async onload() {
     this.settings = mergeSettings(await this.loadData(SETTINGS_STORAGE));
-    ensurePluginSetting(this, Setting, this.createCommandToggleGroup.bind(this));
+    ensurePluginSetting(
+      this,
+      Setting,
+      this.createCommandToggleGroup.bind(this),
+      this.createLocalEditorPathInput.bind(this),
+    );
 
     this.eventBus.on("open-menu-image", this.onImageMenu);
     this.eventBus.on("click-blockicon", this.onBlockIcon);
@@ -82,13 +96,19 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
     this.eventBus.off("open-menu-image", this.onImageMenu);
     this.eventBus.off("click-blockicon", this.onBlockIcon);
     this.eventBus.off("click-editortitleicon", this.onEditorTitleIcon);
+    this.disposeLocalEditorPreviewUrls();
   }
 
   openSetting() {
-    ensurePluginSetting(this, Setting, this.createCommandToggleGroup.bind(this)).open(this.name);
+    ensurePluginSetting(
+      this,
+      Setting,
+      this.createCommandToggleGroup.bind(this),
+      this.createLocalEditorPathInput.bind(this),
+    ).open(this.name);
   }
 
-  private createCommandToggleGroup(settingKey: keyof PluginSettings): HTMLElement {
+  private createCommandToggleGroup(settingKey: CommandMenuSettingKey): HTMLElement {
     const wrapper = document.createElement("div");
     wrapper.className = "image-quickedit-setting-group";
 
@@ -100,14 +120,12 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
       checkbox.checked = this.settings[settingKey][commandId];
       checkbox.type = "checkbox";
       checkbox.addEventListener("change", () => {
-        this.settings = mergeSettings({
-          ...this.settings,
+        this.persistSettings({
           [settingKey]: {
             ...this.settings[settingKey],
             [commandId]: checkbox.checked,
           },
         });
-        void this.saveData(SETTINGS_STORAGE, this.settings);
       });
 
       const text = document.createElement("span");
@@ -121,6 +139,44 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
       wrapper.append(label);
     }
 
+    return wrapper;
+  }
+
+  private createLocalEditorPathInput(): HTMLElement {
+    const wrapper = document.createElement("div");
+    wrapper.className = "image-quickedit-setting-path";
+
+    const input = document.createElement("input");
+    input.className = "b3-text-field fn__block";
+    input.placeholder = "例如：C:\\Program Files\\paint.net\\PaintDotNet.exe";
+    input.spellcheck = false;
+    input.type = "text";
+    input.value = this.settings.localEditorPath;
+
+    const savePath = () => {
+      const nextPath = input.value.trim();
+      if (nextPath === this.settings.localEditorPath) {
+        return;
+      }
+
+      this.persistSettings({
+        localEditorPath: nextPath,
+      });
+    };
+
+    input.addEventListener("change", savePath);
+    input.addEventListener("blur", savePath);
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        savePath();
+      }
+    });
+
+    const hint = document.createElement("div");
+    hint.className = "image-quickedit-setting-hint";
+    hint.textContent = "支持可执行文件路径。配置后可在图片快剪菜单中直接打开本地编辑器。";
+
+    wrapper.append(input, hint);
     return wrapper;
   }
 
@@ -153,6 +209,9 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
       imageInfoLabel: this.imageInfoCache.get(cacheKey) || "读取图片信息中...",
       onCommandClick: (commandId) => {
         void this.runExclusive(async () => this.processSingleTarget(target, commandId));
+      },
+      onOpenLocalEditor: () => {
+        void this.runExclusive(async () => this.editImageWithLocalEditor(target));
       },
     });
     const infoItem = submenu[0];
@@ -251,10 +310,64 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
     showMessage(message, 3000, "info", PROGRESS_MESSAGE_ID);
   }
 
+  private persistSettings(nextSettings: Partial<PluginSettings>): void {
+    this.settings = mergeSettings({
+      ...this.settings,
+      ...nextSettings,
+    });
+    void this.saveData(SETTINGS_STORAGE, this.settings);
+  }
+
   private async processSingleTarget(target: ImageTarget, commandId: CommandId): Promise<void> {
     try {
       const result = await this.processTarget(target, commandId, "insert");
       showMessage(`${COMMAND_DEFINITIONS[commandId].label}完成：${result.summary}`, 6000, "info");
+    }
+    catch (error) {
+      showMessage(error instanceof Error ? error.message : String(error), 6000, "error");
+    }
+  }
+
+  private async editImageWithLocalEditor(target: ImageTarget): Promise<void> {
+    const editorPath = this.settings.localEditorPath.trim();
+    if (!editorPath) {
+      showMessage("请先在插件设置中配置本地图片编辑器路径。", 5000, "error");
+      return;
+    }
+
+    if (!navigator.userAgent.includes("Electron")) {
+      showMessage("本地图片编辑仅支持 Electron 桌面端。", 5000, "error");
+      return;
+    }
+
+    const dataDir = this.getSiyuanDataDir();
+    if (!dataDir) {
+      showMessage("无法读取思源工作空间数据目录。", 5000, "error");
+      return;
+    }
+
+    try {
+      const imagePath = resolveLocalEditorImagePath(target.src, {
+        dataDir,
+        origin: location.origin,
+      });
+
+      this.reportProgress("本地图片编辑：正在打开编辑器");
+      await openLocalEditorAndWait({
+        editorPath,
+        imagePath,
+      });
+      await this.delay(LOCAL_EDITOR_REFRESH_DELAY_MS);
+
+      this.reportProgress("本地图片编辑：正在刷新图片");
+      const refreshedCount = await this.refreshEditedImages(imagePath, dataDir);
+      showMessage(
+        refreshedCount > 0
+          ? `本地图片编辑完成，已刷新 ${refreshedCount} 张图片。`
+          : "本地图片编辑完成，但未找到可刷新的图片块。",
+        6000,
+        "info",
+      );
     }
     catch (error) {
       showMessage(error instanceof Error ? error.message : String(error), 6000, "error");
@@ -354,5 +467,86 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
       outputBytes: prepared.output.bytes,
       summary: markdown.split("\n", 1)[0],
     };
+  }
+
+  private getSiyuanDataDir(): string {
+    const siyuanWindow = window as Window & {
+      siyuan?: {
+        config?: {
+          system?: {
+            dataDir?: string;
+          };
+        };
+      };
+    };
+
+    return siyuanWindow.siyuan?.config?.system?.dataDir || "";
+  }
+
+  private async refreshEditedImages(editedImagePath: string, dataDir: string): Promise<number> {
+    const imageElements = Array.from(document.querySelectorAll<HTMLImageElement>(".protyle-wysiwyg img"));
+    let refreshedCount = 0;
+
+    for (const imageElement of imageElements) {
+      const stableSrc = this.getStableImageSrc(imageElement);
+      if (!stableSrc) {
+        continue;
+      }
+
+      try {
+        const candidatePath = resolveLocalEditorImagePath(stableSrc, {
+          dataDir,
+          origin: location.origin,
+        });
+        if (candidatePath !== editedImagePath) {
+          continue;
+        }
+      }
+      catch {
+        continue;
+      }
+
+      const previewUrl = await createEditedImagePreviewUrl(stableSrc);
+      this.replaceLocalEditorPreviewUrl(imageElement, previewUrl);
+      imageElement.dataset.src = stableSrc;
+
+      refreshedCount += 1;
+    }
+
+    return refreshedCount;
+  }
+
+  private async delay(timeout: number): Promise<void> {
+    await new Promise(resolve => setTimeout(resolve, timeout));
+  }
+
+  private getStableImageSrc(imageElement: HTMLImageElement): string {
+    const source = imageElement.dataset.src
+      || imageElement.getAttribute("src")
+      || imageElement.currentSrc
+      || imageElement.src;
+    if (!source) {
+      return "";
+    }
+
+    return removeCacheBustingSearchParam(source);
+  }
+
+  private replaceLocalEditorPreviewUrl(imageElement: HTMLImageElement, previewUrl: string): void {
+    const currentPreviewUrl = this.localEditorPreviewUrls.get(imageElement);
+    if (currentPreviewUrl) {
+      URL.revokeObjectURL(currentPreviewUrl);
+    }
+
+    this.localEditorPreviewUrls.set(imageElement, previewUrl);
+    imageElement.src = previewUrl;
+  }
+
+  private disposeLocalEditorPreviewUrls(): void {
+    for (const previewUrl of this.localEditorPreviewUrls.values()) {
+      URL.revokeObjectURL(previewUrl);
+    }
+
+    this.localEditorPreviewUrls.clear();
   }
 }

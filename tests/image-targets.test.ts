@@ -37,3 +37,17 @@ test("resolveImageTarget still works when invoked with the image element itself"
   expect(imageTarget).not.toBeNull();
   expect(imageTarget?.blockId).toBe("20260314-inline-image");
 });
+
+test("resolveImageTarget prefers data-src when local preview replaces src", () => {
+  document.body.innerHTML = `
+    <div data-node-id="20260314-preview-image">
+      <img src="blob:http://127.0.0.1:6806/preview" data-src="/assets/original.png" alt="preview" width="200" height="100">
+    </div>
+  `;
+
+  const imageElement = document.querySelector("img") as HTMLElement;
+  const imageTarget = resolveImageTarget(imageElement);
+
+  expect(imageTarget).not.toBeNull();
+  expect(imageTarget?.src).toBe("/assets/original.png");
+});

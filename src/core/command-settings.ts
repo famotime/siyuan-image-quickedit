@@ -13,7 +13,13 @@ export interface PluginSettings {
   imageMenuCommands: CommandToggleMap;
   documentInsertMenuCommands: CommandToggleMap;
   documentReplaceMenuCommands: CommandToggleMap;
+  localEditorPath: string;
 }
+
+export type CommandMenuSettingKey =
+  | "imageMenuCommands"
+  | "documentInsertMenuCommands"
+  | "documentReplaceMenuCommands";
 
 type LegacyPluginSettings = Partial<PluginSettings> & {
   documentMenuCommands?: Partial<CommandToggleMap>;
@@ -30,6 +36,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   imageMenuCommands: { ...DEFAULT_COMMAND_TOGGLES },
   documentInsertMenuCommands: { ...DEFAULT_COMMAND_TOGGLES },
   documentReplaceMenuCommands: { ...DEFAULT_COMMAND_TOGGLES },
+  localEditorPath: "",
 };
 
 export function mergeSettings(settings?: LegacyPluginSettings | null): PluginSettings {
@@ -50,6 +57,7 @@ export function mergeSettings(settings?: LegacyPluginSettings | null): PluginSet
       ...legacyDocumentMenuCommands,
       ...settings?.documentReplaceMenuCommands,
     },
+    localEditorPath: settings?.localEditorPath ?? DEFAULT_SETTINGS.localEditorPath,
   };
 }
 

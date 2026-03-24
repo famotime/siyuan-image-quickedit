@@ -11,6 +11,7 @@ test("mergeSettings fills missing menu toggles with defaults", () => {
     documentInsertMenuCommands: {
       "compress-30": false,
     },
+    localEditorPath: "C:\\Program Files\\paint.net\\PaintDotNet.exe",
     imageMenuCommands: {
       "compress-10": false,
     },
@@ -29,6 +30,7 @@ test("mergeSettings fills missing menu toggles with defaults", () => {
     "compress-10": true,
   });
   expect(settings.documentReplaceMenuCommands).toEqual(DEFAULT_SETTINGS.documentReplaceMenuCommands);
+  expect(settings.localEditorPath).toBe("C:\\Program Files\\paint.net\\PaintDotNet.exe");
 });
 
 test("mergeSettings migrates legacy document menu toggles to both document menu groups", () => {
@@ -53,6 +55,7 @@ test("mergeSettings migrates legacy document menu toggles to both document menu 
     "compress-30": false,
     "compress-10": true,
   });
+  expect(settings.localEditorPath).toBe("");
 });
 
 test("getEnabledCommandIds keeps PRD command order and filters disabled items", () => {
