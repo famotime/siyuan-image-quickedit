@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a SiYuan note-taking plugin that provides quick image conversion and compression actions. Users can right-click images in documents to convert to WebP format or compress to target file sizes (50%, 30%, 10%). The plugin also supports batch operations on all images in a document.
+This is a SiYuan note-taking plugin that provides quick image conversion and compression actions. Users can right-click images in documents to convert to WebP format or compress to target file sizes (75%, 50%, 30%, 10%). The plugin also supports batch operations on all images in a document.
 
 ## Development Commands
 
@@ -45,7 +45,7 @@ npm run release:major        # Major version bump
 ### Core Modules
 
 **Command System** (`src/core/`)
-- `command-meta.ts` - Defines 4 commands: convert-webp, compress-50, compress-30, compress-10
+- `command-meta.ts` - Defines 5 commands: convert-webp, compress-75, compress-50, compress-30, compress-10
 - `command-settings.ts` - User settings for which commands appear in menus
 - `task-runner.ts` - Sequential batch processing with progress reporting
 
@@ -54,7 +54,7 @@ npm run release:major        # Major version bump
   - Fetches image from DOM/network
   - Detects metadata (size, resolution, color depth)
   - Applies display scale from user's drag-resize
-  - Iteratively compresses using quality steps until target ratio met
+  - Iteratively compresses using resolution steps, WebP quality steps, and palette reduction until target ratio met
   - Always outputs WebP format
 - `kernel.ts` - SiYuan API calls (upload assets, insert blocks)
 

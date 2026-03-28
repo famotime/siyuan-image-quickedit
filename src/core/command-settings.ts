@@ -1,5 +1,6 @@
 export const COMMAND_ORDER = [
   "convert-webp",
+  "compress-75",
   "compress-50",
   "compress-30",
   "compress-10",
@@ -27,6 +28,7 @@ type LegacyPluginSettings = Partial<PluginSettings> & {
 
 export const DEFAULT_COMMAND_TOGGLES: CommandToggleMap = {
   "convert-webp": true,
+  "compress-75": true,
   "compress-50": true,
   "compress-30": true,
   "compress-10": true,

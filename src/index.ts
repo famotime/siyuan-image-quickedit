@@ -174,7 +174,7 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
 
     const hint = document.createElement("div");
     hint.className = "image-quickedit-setting-hint";
-    hint.textContent = "支持可执行文件路径。配置后可在图片快剪菜单中直接打开本地编辑器。";
+    hint.textContent = "可执行文件路径，不含引号。";
 
     wrapper.append(input, hint);
     return wrapper;

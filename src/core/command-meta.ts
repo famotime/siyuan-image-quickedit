@@ -15,6 +15,13 @@ export const COMMAND_DEFINITIONS: Record<CommandId, CommandDefinition> = {
     label: "转为 WebP 格式",
     replaceBatchLabel: "全部转为 WebP 格式（替换）",
   },
+  "compress-75": {
+    id: "compress-75",
+    insertBatchLabel: "全部压缩到 75%（新增）",
+    label: "压缩到 75%",
+    replaceBatchLabel: "全部压缩到 75%（替换）",
+    targetRatio: 0.75,
+  },
   "compress-50": {
     id: "compress-50",
     insertBatchLabel: "全部压缩到 50%（新增）",

@@ -4,6 +4,7 @@ import { COMMAND_DEFINITIONS } from "@/core/command-meta.ts";
 import type { CommandId } from "@/core/command-settings.ts";
 import { buildImageInfoLine, buildResultMarkdown } from "@/core/formatters.ts";
 import { replaceImageSourceInMarkdown } from "@/core/image-markdown.ts";
+import { quantizeRgbaBufferToMaxColors } from "@/services/palette-quantization.ts";
 
 export interface ImageTarget {
   alt: string;
@@ -44,6 +45,7 @@ interface InspectedImageTarget {
 }
 
 const QUALITY_STEPS = [0.92, 0.86, 0.78, 0.7, 0.62, 0.54, 0.46, 0.38, 0.3];
+const PALETTE_COLOR_LIMITS = [256, 128, 64, 32, 16];
 
 function clampScale(scale: number): number {
   return Math.min(1, Math.max(0.1, scale || 1));
@@ -156,7 +158,13 @@ async function canvasToBlob(canvas: HTMLCanvasElement, quality: number): Promise
   });
 }
 
-async function renderCandidate(bitmap: ImageBitmap, width: number, height: number, quality: number): Promise<Blob> {
+async function renderCandidate(
+  bitmap: ImageBitmap,
+  width: number,
+  height: number,
+  quality: number,
+  maxColors?: number,
+): Promise<Blob> {
   const canvas = createCanvas(width, height);
   const context = canvas.getContext("2d");
   if (!context) {
@@ -164,20 +172,28 @@ async function renderCandidate(bitmap: ImageBitmap, width: number, height: numbe
   }
 
   context.drawImage(bitmap, 0, 0, width, height);
+  if (maxColors) {
+    const imageData = context.getImageData(0, 0, width, height);
+    imageData.data.set(quantizeRgbaBufferToMaxColors(imageData.data, maxColors));
+    context.putImageData(imageData, 0, 0);
+  }
+
   return canvasToBlob(canvas, quality);
 }
 
-function getScaleSteps(baseScale: number): number[] {
+export function buildCompressionScaleSteps(baseScale: number): number[] {
+  const normalizedBaseScale = clampScale(baseScale);
   const steps = [
-    baseScale,
-    baseScale * 0.9,
-    baseScale * 0.8,
-    baseScale * 0.7,
-    baseScale * 0.6,
-    baseScale * 0.5,
-    baseScale * 0.4,
-    baseScale * 0.3,
-    baseScale * 0.2,
+    1,
+    normalizedBaseScale,
+    normalizedBaseScale * 0.9,
+    normalizedBaseScale * 0.8,
+    normalizedBaseScale * 0.7,
+    normalizedBaseScale * 0.6,
+    normalizedBaseScale * 0.5,
+    normalizedBaseScale * 0.4,
+    normalizedBaseScale * 0.3,
+    normalizedBaseScale * 0.2,
   ].map(clampScale);
 
   return [...new Set(steps)];
@@ -236,7 +252,7 @@ async function compressToTargetRatio(
   const targetBytes = Math.max(1, Math.floor(inspected.original.bytes * targetRatio));
   let bestCandidate: PreparedImageResult["output"] | null = null;
 
-  for (const scale of getScaleSteps(inspected.displayScale)) {
+  for (const scale of buildCompressionScaleSteps(inspected.displayScale)) {
     const width = Math.max(1, Math.round(inspected.original.width * scale));
     const height = Math.max(1, Math.round(inspected.original.height * scale));
     onProgress?.(`正在尝试 ${width}×${height}`);
@@ -257,6 +273,29 @@ async function compressToTargetRatio(
 
       if (candidate.bytes <= targetBytes) {
         return candidate;
+      }
+    }
+
+    for (const maxColors of PALETTE_COLOR_LIMITS) {
+      onProgress?.(`正在尝试 ${width}×${height} / ${maxColors} 色`);
+
+      for (const quality of QUALITY_STEPS) {
+        const blob = await renderCandidate(inspected.bitmap, width, height, quality, maxColors);
+        const candidate = {
+          blob,
+          bytes: blob.size,
+          format: "webp",
+          height,
+          width,
+        };
+
+        if (!bestCandidate || candidate.bytes < bestCandidate.bytes) {
+          bestCandidate = candidate;
+        }
+
+        if (candidate.bytes <= targetBytes) {
+          return candidate;
+        }
       }
     }
   }

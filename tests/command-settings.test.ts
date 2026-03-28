@@ -19,12 +19,14 @@ test("mergeSettings fills missing menu toggles with defaults", () => {
 
   expect(settings.imageMenuCommands).toEqual({
     "convert-webp": true,
+    "compress-75": true,
     "compress-50": true,
     "compress-30": true,
     "compress-10": false,
   });
   expect(settings.documentInsertMenuCommands).toEqual({
     "convert-webp": true,
+    "compress-75": true,
     "compress-50": true,
     "compress-30": false,
     "compress-10": true,
@@ -37,6 +39,7 @@ test("mergeSettings migrates legacy document menu toggles to both document menu 
   const settings = mergeSettings({
     documentMenuCommands: {
       "convert-webp": false,
+      "compress-75": true,
       "compress-50": true,
       "compress-30": false,
       "compress-10": true,
@@ -45,12 +48,14 @@ test("mergeSettings migrates legacy document menu toggles to both document menu 
 
   expect(settings.documentInsertMenuCommands).toEqual({
     "convert-webp": false,
+    "compress-75": true,
     "compress-50": true,
     "compress-30": false,
     "compress-10": true,
   });
   expect(settings.documentReplaceMenuCommands).toEqual({
     "convert-webp": false,
+    "compress-75": true,
     "compress-50": true,
     "compress-30": false,
     "compress-10": true,
@@ -61,6 +66,7 @@ test("mergeSettings migrates legacy document menu toggles to both document menu 
 test("getEnabledCommandIds keeps PRD command order and filters disabled items", () => {
   const enabled = getEnabledCommandIds({
     "convert-webp": true,
+    "compress-75": true,
     "compress-50": false,
     "compress-30": true,
     "compress-10": true,
@@ -68,6 +74,7 @@ test("getEnabledCommandIds keeps PRD command order and filters disabled items", 
 
   expect(enabled).toEqual([
     "convert-webp",
+    "compress-75",
     "compress-30",
     "compress-10",
   ]);
