@@ -54,7 +54,7 @@ npm run release:major        # Major version bump
   - Fetches image from DOM/network
   - Detects metadata (size, resolution, color depth)
   - Applies display scale from user's drag-resize
-  - Iteratively compresses using resolution steps, WebP quality steps, and palette reduction until target ratio met
+  - Searches compression candidates across resolution, quality, and palette variants, then picks the best visual result under the target size
   - Always outputs WebP format
 - `kernel.ts` - SiYuan API calls (upload assets, insert blocks)
 

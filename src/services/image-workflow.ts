@@ -4,6 +4,10 @@ import { COMMAND_DEFINITIONS } from "@/core/command-meta.ts";
 import type { CommandId } from "@/core/command-settings.ts";
 import { buildImageInfoLine, buildResultMarkdown } from "@/core/formatters.ts";
 import { replaceImageSourceInMarkdown } from "@/core/image-markdown.ts";
+import {
+  compareSatisfiedCandidates,
+  type CompressionCandidate,
+} from "@/services/compression-strategy.ts";
 import { quantizeRgbaBufferToMaxColors } from "@/services/palette-quantization.ts";
 
 export interface ImageTarget {
@@ -44,8 +48,16 @@ interface InspectedImageTarget {
   original: ImageMetadata;
 }
 
+interface RuntimeCompressionCandidate extends CompressionCandidate {
+  blob: Blob;
+}
+
 const QUALITY_STEPS = [0.92, 0.86, 0.78, 0.7, 0.62, 0.54, 0.46, 0.38, 0.3];
 const PALETTE_COLOR_LIMITS = [256, 128, 64, 32, 16];
+const MIN_COMPRESSION_QUALITY = 0.05;
+const MAX_COMPRESSION_QUALITY = 0.98;
+const QUALITY_SEARCH_ITERATIONS = 8;
+const QUALITY_REFINEMENT_FACTORS = [0.25, 0.5, 0.75];
 
 function clampScale(scale: number): number {
   return Math.min(1, Math.max(0.1, scale || 1));
@@ -181,6 +193,138 @@ async function renderCandidate(
   return canvasToBlob(canvas, quality);
 }
 
+function normalizeQuality(quality: number): number {
+  return Number(Math.min(MAX_COMPRESSION_QUALITY, Math.max(MIN_COMPRESSION_QUALITY, quality)).toFixed(3));
+}
+
+function toRuntimeCandidate(
+  blob: Blob,
+  width: number,
+  height: number,
+  quality: number,
+  maxColors?: number,
+): RuntimeCompressionCandidate {
+  return {
+    blob,
+    bytes: blob.size,
+    format: "webp",
+    height,
+    maxColors,
+    quality,
+    width,
+  };
+}
+
+function pickSmallerCandidate(
+  currentBest: RuntimeCompressionCandidate | null,
+  candidate: RuntimeCompressionCandidate,
+): RuntimeCompressionCandidate {
+  if (!currentBest || candidate.bytes < currentBest.bytes) {
+    return candidate;
+  }
+
+  return currentBest;
+}
+
+function pickBetterSatisfiedCandidate(
+  currentBest: RuntimeCompressionCandidate | null,
+  candidate: RuntimeCompressionCandidate,
+  inspected: InspectedImageTarget,
+  targetBytes: number,
+): RuntimeCompressionCandidate {
+  if (!currentBest) {
+    return candidate;
+  }
+
+  return compareSatisfiedCandidates(candidate, currentBest, {
+    originalHeight: inspected.original.height,
+    originalWidth: inspected.original.width,
+    targetBytes,
+  }) > 0
+    ? candidate
+    : currentBest;
+}
+
+async function findBestCandidateForVariant(
+  inspected: InspectedImageTarget,
+  width: number,
+  height: number,
+  targetBytes: number,
+  maxColors?: number,
+): Promise<{
+  bestOverall: RuntimeCompressionCandidate;
+  bestWithinTarget: RuntimeCompressionCandidate | null;
+}> {
+  let bestOverall: RuntimeCompressionCandidate | null = null;
+  let bestWithinTarget: RuntimeCompressionCandidate | null = null;
+  const cache = new Map<number, RuntimeCompressionCandidate>();
+
+  const evaluate = async (quality: number): Promise<RuntimeCompressionCandidate> => {
+    const normalizedQuality = normalizeQuality(quality);
+    const cached = cache.get(normalizedQuality);
+    if (cached) {
+      return cached;
+    }
+
+    const blob = await renderCandidate(inspected.bitmap, width, height, normalizedQuality, maxColors);
+    const candidate = toRuntimeCandidate(blob, width, height, normalizedQuality, maxColors);
+    cache.set(normalizedQuality, candidate);
+    bestOverall = pickSmallerCandidate(bestOverall, candidate);
+
+    if (candidate.bytes <= targetBytes) {
+      bestWithinTarget = pickBetterSatisfiedCandidate(bestWithinTarget, candidate, inspected, targetBytes);
+    }
+
+    return candidate;
+  };
+
+  const highestQualityCandidate = await evaluate(MAX_COMPRESSION_QUALITY);
+  if (highestQualityCandidate.bytes <= targetBytes) {
+    return {
+      bestOverall: bestOverall!,
+      bestWithinTarget,
+    };
+  }
+
+  const lowestQualityCandidate = await evaluate(MIN_COMPRESSION_QUALITY);
+  if (lowestQualityCandidate.bytes > targetBytes) {
+    return {
+      bestOverall: bestOverall!,
+      bestWithinTarget: null,
+    };
+  }
+
+  let lowerBound = MIN_COMPRESSION_QUALITY;
+  let upperBound = MAX_COMPRESSION_QUALITY;
+
+  for (let iteration = 0; iteration < QUALITY_SEARCH_ITERATIONS; iteration += 1) {
+    const midpoint = normalizeQuality((lowerBound + upperBound) / 2);
+    if (midpoint <= lowerBound || midpoint >= upperBound) {
+      break;
+    }
+
+    const candidate = await evaluate(midpoint);
+    if (candidate.bytes <= targetBytes) {
+      lowerBound = midpoint;
+    }
+    else {
+      upperBound = midpoint;
+    }
+  }
+
+  for (const factor of QUALITY_REFINEMENT_FACTORS) {
+    const quality = normalizeQuality(lowerBound + (upperBound - lowerBound) * factor);
+    if (quality > lowerBound && quality < upperBound) {
+      await evaluate(quality);
+    }
+  }
+
+  return {
+    bestOverall: bestOverall!,
+    bestWithinTarget,
+  };
+}
+
 export function buildCompressionScaleSteps(baseScale: number): number[] {
   const normalizedBaseScale = clampScale(baseScale);
   const steps = [
@@ -250,61 +394,72 @@ async function compressToTargetRatio(
   }
 
   const targetBytes = Math.max(1, Math.floor(inspected.original.bytes * targetRatio));
-  let bestCandidate: PreparedImageResult["output"] | null = null;
+  let bestOverallCandidate: RuntimeCompressionCandidate | null = null;
+  let bestWithinTargetCandidate: RuntimeCompressionCandidate | null = null;
 
   for (const scale of buildCompressionScaleSteps(inspected.displayScale)) {
     const width = Math.max(1, Math.round(inspected.original.width * scale));
     const height = Math.max(1, Math.round(inspected.original.height * scale));
     onProgress?.(`正在尝试 ${width}×${height}`);
 
-    for (const quality of QUALITY_STEPS) {
-      const blob = await renderCandidate(inspected.bitmap, width, height, quality);
-      const candidate = {
-        blob,
-        bytes: blob.size,
-        format: "webp",
-        height,
-        width,
-      };
-
-      if (!bestCandidate || candidate.bytes < bestCandidate.bytes) {
-        bestCandidate = candidate;
-      }
-
-      if (candidate.bytes <= targetBytes) {
-        return candidate;
-      }
+    const fullColorResult = await findBestCandidateForVariant(
+      inspected,
+      width,
+      height,
+      targetBytes,
+    );
+    bestOverallCandidate = pickSmallerCandidate(bestOverallCandidate, fullColorResult.bestOverall);
+    if (fullColorResult.bestWithinTarget) {
+      bestWithinTargetCandidate = pickBetterSatisfiedCandidate(
+        bestWithinTargetCandidate,
+        fullColorResult.bestWithinTarget,
+        inspected,
+        targetBytes,
+      );
     }
 
     for (const maxColors of PALETTE_COLOR_LIMITS) {
       onProgress?.(`正在尝试 ${width}×${height} / ${maxColors} 色`);
-
-      for (const quality of QUALITY_STEPS) {
-        const blob = await renderCandidate(inspected.bitmap, width, height, quality, maxColors);
-        const candidate = {
-          blob,
-          bytes: blob.size,
-          format: "webp",
-          height,
-          width,
-        };
-
-        if (!bestCandidate || candidate.bytes < bestCandidate.bytes) {
-          bestCandidate = candidate;
-        }
-
-        if (candidate.bytes <= targetBytes) {
-          return candidate;
-        }
+      const paletteResult = await findBestCandidateForVariant(
+        inspected,
+        width,
+        height,
+        targetBytes,
+        maxColors,
+      );
+      bestOverallCandidate = pickSmallerCandidate(bestOverallCandidate, paletteResult.bestOverall);
+      if (paletteResult.bestWithinTarget) {
+        bestWithinTargetCandidate = pickBetterSatisfiedCandidate(
+          bestWithinTargetCandidate,
+          paletteResult.bestWithinTarget,
+          inspected,
+          targetBytes,
+        );
       }
     }
   }
 
-  if (!bestCandidate) {
+  if (bestWithinTargetCandidate) {
+    return {
+      blob: bestWithinTargetCandidate.blob,
+      bytes: bestWithinTargetCandidate.bytes,
+      format: bestWithinTargetCandidate.format,
+      height: bestWithinTargetCandidate.height,
+      width: bestWithinTargetCandidate.width,
+    };
+  }
+
+  if (!bestOverallCandidate) {
     throw new Error("无法生成压缩结果。");
   }
 
-  return bestCandidate;
+  return {
+    blob: bestOverallCandidate.blob,
+    bytes: bestOverallCandidate.bytes,
+    format: bestOverallCandidate.format,
+    height: bestOverallCandidate.height,
+    width: bestOverallCandidate.width,
+  };
 }
 
 export function resolveImageTarget(element: HTMLElement): ImageTarget | null {
