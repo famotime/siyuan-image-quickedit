@@ -1,70 +1,28 @@
-# 思源图片快剪
+# 一个小插件，缓解你的笔记库存储焦虑
 
-为思源笔记中的图片提供快速转换、压缩和批量处理能力。
+## 楔子
 
-## 功能
+思源笔记库越来越大了，在手机上占的存储量已经远远超过了排名第二位的微信。我也没在笔记里塞什么视频，主要是剪藏了太多公众号、头条号文章惹的祸。现在很多技术类文章都喜欢用 AI 生成的配图，尤其是 NanoBanana 画信息图、流程图效果很赞，有些作者就把生成的原图贴到文章里，每个图片都可能有几兆大小，剪藏下来的笔记文档也就很大了。
 
-- 在图片右键菜单中提供图片信息查看。
-- 支持单图快捷操作：`转为 WebP`、`压缩到 75%`、`压缩到 50%`、`压缩到 30%`、`压缩到 10%`。
-- 支持文档级批量操作，对当前文档内全部图片执行相同处理。
-- 支持通过本地图片编辑器直接打开当前图片并在返回思源后刷新预览。
-- 原图不会删除，处理结果会插入到原图片块后方。
+![image](https://raw.githubusercontent.com/famotime/siyuan-image-quickedit/main/assets/image-20260328212744-2amfjqc.png)
+
+## 思源图片快剪，缓解你的存储焦虑
+
+但实际上笔记中的很多图片并不需要保存高分辨率的原图，只需要看得清就行了。所以我就针对如何快速压缩图片开发了一个小插件，为思源笔记中的图片提供快速转换、压缩和批量处理能力。
+
+- 在图片点击右键，通过通知和菜单项，快速查看图片信息（分辨率、大小）。
+- 支持单图快捷操作：`转为 WebP`​、`压缩到 50%`​、`压缩到 30%`​、`压缩到 10%`。
+- 默认原图不会删除，处理结果会插入到原图下方，供人工比对后处理。
+- 支持文档级批量操作，对当前文档内全部图片一键处理。
 - 插件设置中可分别控制图片右键菜单和文档批量菜单中显示哪些命令。
-
-## 平台支持
-
-- 图片信息、转换、压缩和文档批量处理按插件元数据面向全部前端提供。
-- 本地图片编辑仅支持 Electron 桌面端；移动端和浏览器环境下无法调用外部编辑器。
-
-## 图片信息
-
-图片信息格式如下：
-
-```text
-230.13 KB，1024×572×24 (1.79)
-```
-
-依次表示文件大小、分辨率、颜色深度和宽高比。
-
-## 插入结果
-
-执行转换或压缩后，插件会在原图片后插入一段结果说明和新图片。当前插入结构如下：
-
-```md
----
-
-> **==压缩到50%完成：压缩后图片分辨率1024×572，尺寸比原图（2048×1144）减少50.00%；大小97.66 KB，存储空间相比原图（195.31 KB）减少50.00%，输出格式 WEBP。==**
-
-![processed image](https://raw.githubusercontent.com/famotime/siyuan-image-quickedit/main/asset/action.png)
+- 更复杂的图片编辑需求，可以配置后使用本机图片编辑软件打开，保存后自动刷新笔记内容。
 
 ---
-```
 
-结果说明会以引文形式展示，并同时加粗和高亮，方便在文档中快速识别。
+![image](https://raw.githubusercontent.com/famotime/siyuan-image-quickedit/main/assets/image-20260328211324-8bshq1r.png)
 
-## 风险提示
+![image](https://raw.githubusercontent.com/famotime/siyuan-image-quickedit/main/assets/image-20260328211814-83lo9he.png)
 
-- 新增模式会保留原图，并把处理结果插入到原图片块后方。
-- 替换模式会直接更新原图片块内容；执行前请确认当前文档状态并自行决定是否先备份。
+![image](https://raw.githubusercontent.com/famotime/siyuan-image-quickedit/main/assets/image-20260328211631-894yjrs.png)
 
-## 开发
-
-环境要求：
-
-- Node.js
-- 思源笔记 `>= 2.10.14`
-
-常用命令：
-
-```bash
-npm install
-npm run dev
-npm test
-npm run build
-```
-
-## 参考
-
-- 产品需求文档：`docs/思源图片快剪_siyuan-image-quickedit.md`
-- 开发模板：`plugin-sample-vite-vue`
-- 插件元数据：`plugin.json`
+![image](https://raw.githubusercontent.com/famotime/siyuan-image-quickedit/main/assets/image-20260328211922-03ihi5z.png)
