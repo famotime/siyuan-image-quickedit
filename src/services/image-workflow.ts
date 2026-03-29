@@ -2,8 +2,9 @@ import type { IProtyle } from "siyuan";
 
 import { COMMAND_DEFINITIONS } from "@/core/command-meta.ts";
 import type { CommandId } from "@/core/command-settings.ts";
-import { buildImageInfoLine, buildResultMarkdown } from "@/core/formatters.ts";
+import { buildImageInfoLabel, buildResultMarkdown } from "@/core/formatters.ts";
 import { replaceImageSourceInMarkdown } from "@/core/image-markdown.ts";
+import { loadDocumentEmbeddedAssetBytes } from "@/services/document-asset-stats.ts";
 import {
   compareSatisfiedCandidates,
   type CompressionCandidate,
@@ -518,11 +519,22 @@ export function collectImageTargets(protyle: IProtyle): ImageTarget[] {
 export async function buildImageInfoForTarget(target: ImageTarget): Promise<string> {
   const inspected = await inspectImageTarget(target);
   try {
-    return buildImageInfoLine(inspected.original);
+    const block = await resolveBlockForTarget(target.blockId);
+    const documentEmbeddedAssetBytes = await loadDocumentEmbeddedAssetBytes(block?.root_id || target.blockId);
+
+    return buildImageInfoLabel({
+      documentEmbeddedAssetBytes,
+      imageInfo: inspected.original,
+    });
   }
   finally {
     inspected.bitmap.close();
   }
+}
+
+async function resolveBlockForTarget(blockId: string): Promise<Pick<Block, "id" | "root_id"> | null> {
+  const kernel = await import("@/services/kernel.ts");
+  return kernel.getBlockById(blockId);
 }
 
 export async function prepareProcessedImage(

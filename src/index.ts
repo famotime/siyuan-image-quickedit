@@ -21,6 +21,7 @@ import { buildBatchResultMessage } from "@/core/formatters.ts";
 import {
   buildDocumentBatchSubmenuItems,
   buildImageQuickEditSubmenuItems,
+  syncReadonlyMenuItemLabelElement,
   type DocumentBatchMode,
 } from "@/core/menu-items.ts";
 import { ensurePluginSetting } from "@/core/plugin-setting.ts";
@@ -47,9 +48,11 @@ import {
   removeCacheBustingSearchParam,
   resolveLocalEditorImagePath,
 } from "@/services/local-editor.ts";
+import { showMultilineMessage } from "@/services/message-display.ts";
 import PluginInfo from "@/../plugin.json";
 
 const SETTINGS_STORAGE = "settings.json";
+const IMAGE_INFO_MESSAGE_ID = "siyuan-image-quickedit-image-info";
 const PROGRESS_MESSAGE_ID = "siyuan-image-quickedit-progress";
 const LOCAL_EDITOR_REFRESH_DELAY_MS = 200;
 
@@ -232,7 +235,7 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
   private syncInfoItemElement(infoItem: { element?: HTMLElement; label?: string }): void {
     const labelElement = infoItem.element?.querySelector(".b3-menu__label");
     if (labelElement) {
-      labelElement.textContent = infoItem.label || "";
+      syncReadonlyMenuItemLabelElement(labelElement, infoItem.label || "");
     }
   }
 
@@ -246,7 +249,13 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
       this.imageInfoCache.set(cacheKey, imageInfo);
       infoItem.label = imageInfo;
       this.syncInfoItemElement(infoItem);
-      showMessage(`图片信息：${imageInfo}`, 5000, "info");
+      showMultilineMessage({
+        id: IMAGE_INFO_MESSAGE_ID,
+        show: showMessage,
+        text: `图片信息：${imageInfo}`,
+        timeout: 5000,
+        type: "info",
+      });
     }
     catch (error) {
       console.error("[siyuan-image-quickedit] Failed to inspect image info", error);

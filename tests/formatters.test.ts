@@ -1,6 +1,8 @@
 import { expect, test } from "vitest";
 
 import {
+  buildDocumentEmbeddedAssetInfoLine,
+  buildImageInfoLabel,
   buildImageInfoLine,
   buildBatchResultMessage,
   buildResultMarkdown,
@@ -16,6 +18,27 @@ test("buildImageInfoLine matches the PRD info format", () => {
   });
 
   expect(line).toBe("230.13 KB，1024×572×24 (1.79)");
+});
+
+test("buildDocumentEmbeddedAssetInfoLine formats the current document embedded asset total", () => {
+  expect(buildDocumentEmbeddedAssetInfoLine(1_572_864)).toBe("当前文档内嵌资源总大小：1.50 MB");
+});
+
+test("buildImageInfoLabel appends the current document embedded asset total on a new line", () => {
+  const label = buildImageInfoLabel({
+    documentEmbeddedAssetBytes: 1_572_864,
+    imageInfo: {
+      bytes: 235653,
+      colorDepth: 24,
+      height: 572,
+      width: 1024,
+    },
+  });
+
+  expect(label).toBe([
+    "230.13 KB，1024×572×24 (1.79)",
+    "当前文档内嵌资源总大小：1.50 MB",
+  ].join("\n"));
 });
 
 test("buildResultMarkdown includes summary text and processed image", () => {

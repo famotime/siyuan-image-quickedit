@@ -72,6 +72,25 @@ export function buildImageInfoLine(imageInfo: ImageInfo): string {
   return `${formatBytes(imageInfo.bytes)}，${imageInfo.width}×${imageInfo.height}×${colorDepth} (${formatAspectRatio(imageInfo.width, imageInfo.height)})`;
 }
 
+export function buildDocumentEmbeddedAssetInfoLine(bytes: number): string {
+  return `当前文档内嵌资源总大小：${formatBytes(bytes)}`;
+}
+
+export function buildImageInfoLabel(input: {
+  documentEmbeddedAssetBytes?: number;
+  imageInfo: ImageInfo;
+}): string {
+  const imageInfoLine = buildImageInfoLine(input.imageInfo);
+  if (typeof input.documentEmbeddedAssetBytes !== "number") {
+    return imageInfoLine;
+  }
+
+  return [
+    imageInfoLine,
+    buildDocumentEmbeddedAssetInfoLine(input.documentEmbeddedAssetBytes),
+  ].join("\n");
+}
+
 export function buildResultMarkdown(input: ResultMarkdownInput): string {
   const summary = `${input.commandLabel}完成：压缩后图片分辨率${formatResolution(input.output.width, input.output.height)}，${buildDimensionSummary(input.original, input.output)}；大小${formatBytes(input.output.bytes)}，${buildStorageSummary(input.original.bytes, input.output.bytes)}，输出格式 ${input.output.format.toUpperCase()}。`;
 

@@ -47,6 +47,15 @@ export function buildImageQuickEditSubmenuItems(
   ];
 }
 
+export function syncReadonlyMenuItemLabelElement(labelElement: Element, label: string): void {
+  if (!(labelElement instanceof HTMLElement)) {
+    return;
+  }
+
+  labelElement.textContent = label;
+  labelElement.style.whiteSpace = "pre-line";
+}
+
 export function buildDocumentBatchSubmenuItems(
   options: BuildDocumentBatchSubmenuItemsOptions,
 ): IMenu[] {

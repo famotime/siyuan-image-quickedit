@@ -55,3 +55,27 @@ export async function updateDomBlock(blockId: string, html: string): Promise<voi
     id: blockId,
   });
 }
+
+export async function getDocAssets(documentId: string): Promise<unknown> {
+  return requestApi("/api/asset/getDocAssets", {
+    id: documentId,
+  });
+}
+
+export async function statAsset(path: string): Promise<unknown> {
+  return requestApi("/api/asset/statAsset", {
+    path,
+  });
+}
+
+export async function getBlockById(blockId: string): Promise<Pick<Block, "id" | "root_id"> | null> {
+  const rows = await requestApi<Array<Pick<Block, "id" | "root_id">>>("/api/query/sql", {
+    stmt: `select id, root_id from blocks where id = '${escapeSqlValue(blockId)}' limit 1`,
+  });
+
+  return rows[0] ?? null;
+}
+
+function escapeSqlValue(value: string): string {
+  return value.replaceAll("'", "''");
+}

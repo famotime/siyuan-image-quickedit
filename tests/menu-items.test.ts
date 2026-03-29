@@ -1,8 +1,10 @@
+// @vitest-environment jsdom
 import { expect, test } from "vitest";
 
 import {
   buildDocumentBatchSubmenuItems,
   buildImageQuickEditSubmenuItems,
+  syncReadonlyMenuItemLabelElement,
 } from "../src/core/menu-items.ts";
 
 test("buildImageQuickEditSubmenuItems prepends readonly image info before commands", () => {
@@ -36,6 +38,24 @@ test("buildImageQuickEditSubmenuItems prepends readonly image info before comman
   expect(items[6]).toMatchObject({
     label: "压缩到 50%",
   });
+});
+
+test("syncReadonlyMenuItemLabelElement preserves line breaks for multiline readonly labels", () => {
+  const labelElement = document.createElement("div");
+
+  syncReadonlyMenuItemLabelElement(
+    labelElement,
+    [
+      "230.13 KB，1024×572×24 (1.79)",
+      "当前文档内嵌资源总大小：1.50 MB",
+    ].join("\n"),
+  );
+
+  expect(labelElement.textContent).toBe([
+    "230.13 KB，1024×572×24 (1.79)",
+    "当前文档内嵌资源总大小：1.50 MB",
+  ].join("\n"));
+  expect(labelElement.style.whiteSpace).toBe("pre-line");
 });
 
 test("buildDocumentBatchSubmenuItems creates a flat document menu for insert and replace actions", () => {
