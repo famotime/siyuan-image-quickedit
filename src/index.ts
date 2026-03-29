@@ -102,6 +102,20 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
     this.disposeLocalEditorPreviewUrls();
   }
 
+  async uninstall() {
+    try {
+      await this.removeData(SETTINGS_STORAGE);
+    }
+    catch (error) {
+      const detail = error instanceof Error
+        ? error.message
+        : typeof error === "object" && error && "msg" in error
+          ? String(error.msg)
+          : String(error);
+      showMessage(`uninstall [${this.name}] remove data [${SETTINGS_STORAGE}] fail: ${detail}`);
+    }
+  }
+
   openSetting() {
     ensurePluginSetting(
       this,

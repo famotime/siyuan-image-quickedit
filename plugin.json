@@ -1,6 +1,6 @@
 {
   "name": "siyuan-image-quickedit",
-  "author": "famotime",
+  "author": "Quincy Zou",
   "url": "https://github.com/famotime/siyuan-image-quickedit",
   "version": "0.1.0",
   "minAppVersion": "2.10.14",
@@ -18,16 +18,10 @@
   },
   "description": {
     "default": "Quick actions for image conversion and compression inside SiYuan.",
-    "en_US": "Quick actions for image conversion and compression inside SiYuan.",
     "zh_CN": "为思源笔记中的图片提供快速转换、压缩和批量处理能力。"
   },
   "readme": {
-    "default": "README.md",
-    "en_US": "README.md",
-    "zh_CN": "README_zh_CN.md"
-  },
-  "funding": {
-    "custom": []
+    "default": "README.md"
   },
   "keywords": []
 }

@@ -49,6 +49,11 @@ export default defineConfig(({
         "@": resolve(__dirname, "src"),
       },
     },
+    test: {
+      alias: {
+        siyuan: resolve(__dirname, "tests/stubs/siyuan.ts"),
+      },
+    },
 
     plugins: [
       vue(),
