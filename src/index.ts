@@ -48,7 +48,7 @@ import {
   removeCacheBustingSearchParam,
   resolveLocalEditorImagePath,
 } from "@/services/local-editor.ts";
-import { showMultilineMessage } from "@/services/message-display.ts";
+import { notifyImageInfo } from "@/services/image-info-notification.ts";
 import PluginInfo from "@/../plugin.json";
 
 const SETTINGS_STORAGE = "settings.json";
@@ -82,6 +82,7 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
       this,
       Setting,
       this.createCommandToggleGroup.bind(this),
+      this.createImageInfoNotificationToggle.bind(this),
       this.createLocalEditorPathInput.bind(this),
     );
 
@@ -121,6 +122,7 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
       this,
       Setting,
       this.createCommandToggleGroup.bind(this),
+      this.createImageInfoNotificationToggle.bind(this),
       this.createLocalEditorPathInput.bind(this),
     ).open(this.name);
   }
@@ -197,6 +199,26 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
     return wrapper;
   }
 
+  private createImageInfoNotificationToggle(): HTMLElement {
+    const wrapper = document.createElement("label");
+    wrapper.className = "image-quickedit-setting-option";
+
+    const checkbox = document.createElement("input");
+    checkbox.checked = this.settings.showImageInfoNotification;
+    checkbox.type = "checkbox";
+    checkbox.addEventListener("change", () => {
+      this.persistSettings({
+        showImageInfoNotification: checkbox.checked,
+      });
+    });
+
+    const text = document.createElement("span");
+    text.textContent = "右键打开菜单时显示图片信息通知";
+
+    wrapper.append(checkbox, text);
+    return wrapper;
+  }
+
   private decorateImageMenu(detail: IEventBusMap["open-menu-image"]): void {
     const target = resolveImageTarget(detail.element);
     this.decorateSingleImageMenu(detail.menu, target);
@@ -263,12 +285,10 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
       this.imageInfoCache.set(cacheKey, imageInfo);
       infoItem.label = imageInfo;
       this.syncInfoItemElement(infoItem);
-      showMultilineMessage({
-        id: IMAGE_INFO_MESSAGE_ID,
-        show: showMessage,
-        text: `图片信息：${imageInfo}`,
-        timeout: 5000,
-        type: "info",
+      notifyImageInfo({
+        enabled: this.settings.showImageInfoNotification,
+        imageInfo,
+        messageId: IMAGE_INFO_MESSAGE_ID,
       });
     }
     catch (error) {

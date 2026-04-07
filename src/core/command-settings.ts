@@ -15,6 +15,7 @@ export interface PluginSettings {
   documentInsertMenuCommands: CommandToggleMap;
   documentReplaceMenuCommands: CommandToggleMap;
   localEditorPath: string;
+  showImageInfoNotification: boolean;
 }
 
 export type CommandMenuSettingKey =
@@ -28,9 +29,9 @@ type LegacyPluginSettings = Partial<PluginSettings> & {
 
 export const DEFAULT_COMMAND_TOGGLES: CommandToggleMap = {
   "convert-webp": true,
-  "compress-75": true,
+  "compress-75": false,
   "compress-50": true,
-  "compress-30": true,
+  "compress-30": false,
   "compress-10": true,
 };
 
@@ -39,6 +40,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   documentInsertMenuCommands: { ...DEFAULT_COMMAND_TOGGLES },
   documentReplaceMenuCommands: { ...DEFAULT_COMMAND_TOGGLES },
   localEditorPath: "",
+  showImageInfoNotification: false,
 };
 
 export function mergeSettings(settings?: LegacyPluginSettings | null): PluginSettings {
@@ -60,6 +62,7 @@ export function mergeSettings(settings?: LegacyPluginSettings | null): PluginSet
       ...settings?.documentReplaceMenuCommands,
     },
     localEditorPath: settings?.localEditorPath ?? DEFAULT_SETTINGS.localEditorPath,
+    showImageInfoNotification: settings?.showImageInfoNotification ?? DEFAULT_SETTINGS.showImageInfoNotification,
   };
 }
 

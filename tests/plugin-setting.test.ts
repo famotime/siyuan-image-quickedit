@@ -20,31 +20,36 @@ test("ensurePluginSetting creates and assigns the plugin setting once", () => {
     name: "siyuan-image-quickedit",
   };
   const createCommandToggleGroup = vi.fn(() => ({}) as HTMLElement);
+  const createImageInfoNotificationToggle = vi.fn(() => ({}) as HTMLElement);
   const createLocalEditorPathInput = vi.fn(() => ({}) as HTMLElement);
 
   const setting = ensurePluginSetting(
     host,
     MockSetting,
     createCommandToggleGroup,
+    createImageInfoNotificationToggle,
     createLocalEditorPathInput,
   );
   const reusedSetting = ensurePluginSetting(
     host,
     MockSetting,
     createCommandToggleGroup,
+    createImageInfoNotificationToggle,
     createLocalEditorPathInput,
   );
 
   expect(setting).toBe(host.setting);
   expect(reusedSetting).toBe(setting);
   expect(setting.options.width).toBe("640px");
-  expect(setting.items).toHaveLength(4);
+  expect(setting.items).toHaveLength(5);
   expect(setting.items.map(item => item.title)).toEqual([
     "本地图片编辑",
+    "图片信息通知",
     "图片右键菜单",
     "文档批量菜单（新增）",
     "文档批量菜单（替换）",
   ]);
   expect(createCommandToggleGroup).not.toHaveBeenCalled();
+  expect(createImageInfoNotificationToggle).not.toHaveBeenCalled();
   expect(createLocalEditorPathInput).not.toHaveBeenCalled();
 });
