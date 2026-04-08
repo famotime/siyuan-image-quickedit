@@ -213,7 +213,7 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
     });
 
     const text = document.createElement("span");
-    text.textContent = "右键打开菜单时显示图片信息通知";
+    text.textContent = "右键显示图片信息通知";
 
     wrapper.append(checkbox, text);
     return wrapper;
