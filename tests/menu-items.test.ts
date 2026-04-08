@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 
 import {
   buildDocumentBatchSubmenuItems,
   buildImageQuickEditSubmenuItems,
+  buildSuperBlockMergeMenuItem,
   syncReadonlyMenuItemLabelElement,
 } from "../src/core/menu-items.ts";
 
@@ -87,4 +88,19 @@ test("buildDocumentBatchSubmenuItems creates a flat document menu for insert and
   expect(items[6]).toMatchObject({
     label: "全部压缩到 50%（替换）",
   });
+});
+
+test("buildSuperBlockMergeMenuItem creates the image merge command", () => {
+  const onClick = vi.fn();
+
+  const item = buildSuperBlockMergeMenuItem({
+    onClick,
+  });
+
+  expect(item).toMatchObject({
+    label: "图片合并",
+  });
+
+  item.click?.();
+  expect(onClick).toHaveBeenCalledTimes(1);
 });

@@ -42,6 +42,17 @@ export interface PreparedImageResult {
   };
 }
 
+export interface SuperBlockMergedImageResult {
+  fileName: string;
+  output: {
+    blob: Blob;
+    bytes: number;
+    format: string;
+    height: number;
+    width: number;
+  };
+}
+
 interface InspectedImageTarget {
   bitmap: ImageBitmap;
   displayScale: number;
@@ -514,6 +525,81 @@ export function collectImageTargets(protyle: IProtyle): ImageTarget[] {
       seen.add(key);
       return true;
     });
+}
+
+export function collectSuperBlockImageTargets(superBlockElement: HTMLElement): ImageTarget[] {
+  const imageElements = Array.from(superBlockElement.querySelectorAll("img"));
+  const seen = new Set<string>();
+
+  return imageElements
+    .map(imageElement => resolveImageTarget(imageElement))
+    .filter((target): target is ImageTarget => Boolean(target))
+    .filter((target) => {
+      const key = `${target.blockId}|${target.src}`;
+      if (seen.has(key)) {
+        return false;
+      }
+
+      seen.add(key);
+      return true;
+    });
+}
+
+export async function mergeBitmapsHorizontallyTopAligned(
+  bitmaps: ImageBitmap[],
+): Promise<{ blob: Blob; height: number; width: number }> {
+  const width = bitmaps.reduce((total, bitmap) => total + bitmap.width, 0);
+  const height = bitmaps.reduce((max, bitmap) => Math.max(max, bitmap.height), 0);
+  const canvas = createCanvas(width, height);
+  const context = canvas.getContext("2d");
+  if (!context) {
+    throw new Error("无法创建图片处理画布。");
+  }
+
+  let offsetX = 0;
+  for (const bitmap of bitmaps) {
+    context.drawImage(bitmap, offsetX, 0, bitmap.width, bitmap.height);
+    offsetX += bitmap.width;
+  }
+
+  return {
+    blob: await canvasToBlob(canvas, QUALITY_STEPS[0]),
+    height,
+    width,
+  };
+}
+
+export async function mergeSuperBlockImages(targets: ImageTarget[]): Promise<SuperBlockMergedImageResult> {
+  if (targets.length < 2) {
+    throw new Error("超级块中至少需要两张图片才能合并。");
+  }
+
+  const bitmaps: ImageBitmap[] = [];
+  try {
+    for (const target of targets) {
+      const blob = await fetchImageBlob(target.src);
+      const bitmap = await createImageBitmap(blob);
+      bitmaps.push(bitmap);
+    }
+
+    const merged = await mergeBitmapsHorizontallyTopAligned(bitmaps);
+
+    return {
+      fileName: `superblock-merge-${Date.now()}.webp`,
+      output: {
+        blob: merged.blob,
+        bytes: merged.blob.size,
+        format: "webp",
+        height: merged.height,
+        width: merged.width,
+      },
+    };
+  }
+  finally {
+    for (const bitmap of bitmaps) {
+      bitmap.close();
+    }
+  }
 }
 
 export async function buildImageInfoForTarget(target: ImageTarget): Promise<string> {

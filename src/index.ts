@@ -21,6 +21,7 @@ import { buildBatchResultMessage } from "@/core/formatters.ts";
 import {
   buildDocumentBatchSubmenuItems,
   buildImageQuickEditSubmenuItems,
+  buildSuperBlockMergeMenuItem,
   syncReadonlyMenuItemLabelElement,
   type DocumentBatchMode,
 } from "@/core/menu-items.ts";
@@ -36,7 +37,9 @@ import {
   buildReplacedBlockMarkdown,
   buildImageInfoForTarget,
   buildProcessedResultMarkdown,
+  collectSuperBlockImageTargets,
   collectImageTargets,
+  mergeSuperBlockImages,
   prepareProcessedImage,
   resolveImageTarget,
   resolveImageTargetFromBlockElements,
@@ -225,6 +228,20 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
   }
 
   private decorateBlockIconMenu(detail: IEventBusMap["click-blockicon"]): void {
+    const superBlockElement = detail.blockElements.find(
+      blockElement => blockElement.dataset.type === "NodeSuperBlock",
+    );
+    if (superBlockElement) {
+      const targets = collectSuperBlockImageTargets(superBlockElement);
+      if (targets.length >= 2) {
+        detail.menu.addItem(buildSuperBlockMergeMenuItem({
+          onClick: () => {
+            void this.runExclusive(async () => this.mergeImagesForSuperBlock(superBlockElement));
+          },
+        }));
+      }
+    }
+
     const target = resolveImageTargetFromBlockElements(detail.blockElements);
     this.decorateSingleImageMenu(detail.menu, target);
   }
@@ -510,6 +527,37 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
       outputBytes: prepared.output.bytes,
       summary: markdown.split("\n", 1)[0],
     };
+  }
+
+  private async mergeImagesForSuperBlock(superBlockElement: HTMLElement): Promise<void> {
+    const superBlockId = superBlockElement.dataset.nodeId;
+    if (!superBlockId) {
+      showMessage("找不到超级块 ID。", 6000, "error");
+      return;
+    }
+
+    try {
+      const targets = collectSuperBlockImageTargets(superBlockElement);
+      if (targets.length < 2) {
+        throw new Error("超级块中至少需要两张图片才能合并。");
+      }
+
+      this.reportProgress("图片合并：正在生成拼接结果");
+      const merged = await mergeSuperBlockImages(targets);
+
+      this.reportProgress("图片合并：正在上传处理结果");
+      const assetPath = await uploadAsset(new File([merged.output.blob], merged.fileName, {
+        type: "image/webp",
+      }));
+
+      this.reportProgress("图片合并：正在插入结果块");
+      await insertMarkdownAfterBlock(superBlockId, `![图片合并](${assetPath})`);
+
+      showMessage("图片合并完成，结果已插入到超级块下方。", 6000, "info");
+    }
+    catch (error) {
+      showMessage(error instanceof Error ? error.message : String(error), 6000, "error");
+    }
   }
 
   private getSiyuanDataDir(): string {

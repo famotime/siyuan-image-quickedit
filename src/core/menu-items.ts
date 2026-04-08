@@ -79,3 +79,10 @@ export function buildDocumentBatchSubmenuItems(
 
   return items;
 }
+
+export function buildSuperBlockMergeMenuItem(options: { onClick: () => void }): IMenu {
+  return {
+    click: () => options.onClick(),
+    label: "图片合并",
+  };
+}
