@@ -3,21 +3,49 @@ interface ResolveLocalEditorImagePathOptions {
   origin?: string;
 }
 
+export interface LocalEditorImageSource {
+  filePath: string;
+  kind: "external-file" | "workspace-asset";
+  workspaceRelativePath?: string;
+}
+
+export interface LocalEditorEditSession {
+  imagePath: string;
+  kind: "external-file" | "workspace-asset";
+  originalPath: string;
+  tempDirPath?: string;
+  tempPath?: string;
+}
+
 interface LaunchLocalEditorOptions {
   editorPath: string;
   imagePath: string;
   platform?: NodeJS.Platform;
 }
 
+interface PrepareLocalEditorEditSessionOptions {
+  tempDir?: string;
+}
+
 export function resolveLocalEditorImagePath(
   imageSrc: string,
   options: ResolveLocalEditorImagePathOptions,
 ): string {
+  return resolveLocalEditorImageSource(imageSrc, options).filePath;
+}
+
+export function resolveLocalEditorImageSource(
+  imageSrc: string,
+  options: ResolveLocalEditorImagePathOptions,
+): LocalEditorImageSource {
   const baseOrigin = options.origin || getCurrentOrigin();
   const parsedUrl = new URL(imageSrc, baseOrigin);
 
   if (parsedUrl.protocol === "file:") {
-    return normalizePlatformPath(decodeURIComponent(parsedUrl.pathname));
+    return {
+      filePath: normalizePlatformPath(decodeURIComponent(parsedUrl.pathname)),
+      kind: "external-file",
+    };
   }
 
   if (!["http:", "https:"].includes(parsedUrl.protocol)) {
@@ -28,7 +56,66 @@ export function resolveLocalEditorImagePath(
     throw new Error("仅支持编辑当前思源工作空间中的本地图片。");
   }
 
-  return joinPlatformPath(options.dataDir, decodeURIComponent(parsedUrl.pathname).replace(/^\/+/, ""));
+  const workspaceRelativePath = decodeURIComponent(parsedUrl.pathname).replace(/^\/+/, "");
+  return {
+    filePath: joinPlatformPath(options.dataDir, workspaceRelativePath),
+    kind: "workspace-asset",
+    workspaceRelativePath,
+  };
+}
+
+export async function prepareLocalEditorEditSession(
+  source: LocalEditorImageSource,
+  options: PrepareLocalEditorEditSessionOptions = {},
+): Promise<LocalEditorEditSession> {
+  if (source.kind === "external-file") {
+    return {
+      imagePath: source.filePath,
+      kind: source.kind,
+      originalPath: source.filePath,
+    };
+  }
+
+  const { mkdir, mkdtemp, copyFile } = await getFsPromises();
+  const { basename, join } = await getNodePath();
+  const tempRoot = options.tempDir || join((await getNodeOs()).tmpdir(), "siyuan-image-quickedit");
+  await mkdir(tempRoot, { recursive: true });
+
+  const tempDirPath = await mkdtemp(join(tempRoot, "edit-"));
+  const tempPath = join(tempDirPath, basename(source.filePath));
+  await copyFile(source.filePath, tempPath);
+
+  return {
+    imagePath: tempPath,
+    kind: source.kind,
+    originalPath: source.filePath,
+    tempDirPath,
+    tempPath,
+  };
+}
+
+export async function commitLocalEditorEditSession(session: LocalEditorEditSession): Promise<void> {
+  if (session.kind === "workspace-asset" && session.tempPath) {
+    const { copyFile } = await getFsPromises();
+    await copyFile(session.tempPath, session.originalPath);
+  }
+
+  await cleanupLocalEditorEditSession(session);
+}
+
+export async function cleanupLocalEditorEditSession(session: LocalEditorEditSession): Promise<void> {
+  if (!session.tempDirPath) {
+    return;
+  }
+
+  const { rm } = await getFsPromises();
+  await rm(session.tempDirPath, {
+    force: true,
+    recursive: true,
+  });
+
+  delete session.tempDirPath;
+  delete session.tempPath;
 }
 
 export function buildCacheBustedImageSrc(imageSrc: string, timestamp = Date.now()): string {
@@ -47,16 +134,7 @@ export function removeCacheBustingSearchParam(imageSrc: string): string {
 }
 
 export async function createEditedImagePreviewUrl(imageSrc: string): Promise<string> {
-  const previewSrc = buildCacheBustedImageSrc(removeCacheBustingSearchParam(imageSrc));
-  const response = await fetch(previewSrc, {
-    cache: "no-store",
-  });
-  if (!response.ok) {
-    throw new Error(`无法刷新已编辑图片：${response.status}`);
-  }
-
-  const blob = await response.blob();
-  return URL.createObjectURL(blob);
+  return buildCacheBustedImageSrc(removeCacheBustingSearchParam(imageSrc));
 }
 
 export async function openLocalEditorAndWait(options: LaunchLocalEditorOptions): Promise<void> {
@@ -120,6 +198,33 @@ function buildLocalEditorLaunchCommand(options: LaunchLocalEditorOptions): {
 
 function getCurrentOrigin(): string {
   return globalThis.location?.origin || "http://127.0.0.1:6806";
+}
+
+async function getFsPromises(): Promise<typeof import("node:fs/promises")> {
+  const nodeRequire = getNodeRequire();
+  if (nodeRequire) {
+    return nodeRequire("node:fs/promises") as typeof import("node:fs/promises");
+  }
+
+  return import("node:fs/promises");
+}
+
+async function getNodeOs(): Promise<typeof import("node:os")> {
+  const nodeRequire = getNodeRequire();
+  if (nodeRequire) {
+    return nodeRequire("node:os") as typeof import("node:os");
+  }
+
+  return import("node:os");
+}
+
+async function getNodePath(): Promise<typeof import("node:path")> {
+  const nodeRequire = getNodeRequire();
+  if (nodeRequire) {
+    return nodeRequire("node:path") as typeof import("node:path");
+  }
+
+  return import("node:path");
 }
 
 function joinPlatformPath(basePath: string, relativePath: string): string {

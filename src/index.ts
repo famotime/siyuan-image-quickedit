@@ -46,9 +46,13 @@ import {
   type ImageTarget,
 } from "@/services/image-workflow.ts";
 import {
+  cleanupLocalEditorEditSession,
+  commitLocalEditorEditSession,
   createEditedImagePreviewUrl,
   openLocalEditorAndWait,
+  prepareLocalEditorEditSession,
   removeCacheBustingSearchParam,
+  resolveLocalEditorImageSource,
   resolveLocalEditorImagePath,
 } from "@/services/local-editor.ts";
 import { notifyImageInfo } from "@/services/image-info-notification.ts";
@@ -407,20 +411,28 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
     }
 
     try {
-      const imagePath = resolveLocalEditorImagePath(target.src, {
+      const imageSource = resolveLocalEditorImageSource(target.src, {
         dataDir,
         origin: location.origin,
       });
+      const editSession = await prepareLocalEditorEditSession(imageSource);
 
-      this.reportProgress("本地图片编辑：正在打开编辑器");
-      await openLocalEditorAndWait({
-        editorPath,
-        imagePath,
-      });
-      await this.delay(LOCAL_EDITOR_REFRESH_DELAY_MS);
+      try {
+        this.reportProgress("本地图片编辑：正在打开编辑器");
+        await openLocalEditorAndWait({
+          editorPath,
+          imagePath: editSession.imagePath,
+        });
+        await this.delay(LOCAL_EDITOR_REFRESH_DELAY_MS);
+
+        await commitLocalEditorEditSession(editSession);
+      }
+      finally {
+        await cleanupLocalEditorEditSession(editSession);
+      }
 
       this.reportProgress("本地图片编辑：正在刷新图片");
-      const refreshedCount = await this.refreshEditedImages(imagePath, dataDir);
+      const refreshedCount = await this.refreshEditedImages(imageSource.filePath, dataDir);
       showMessage(
         refreshedCount > 0
           ? `本地图片编辑完成，已刷新 ${refreshedCount} 张图片。`
@@ -625,7 +637,7 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
 
   private replaceLocalEditorPreviewUrl(imageElement: HTMLImageElement, previewUrl: string): void {
     const currentPreviewUrl = this.localEditorPreviewUrls.get(imageElement);
-    if (currentPreviewUrl) {
+    if (currentPreviewUrl?.startsWith("blob:")) {
       URL.revokeObjectURL(currentPreviewUrl);
     }
 
