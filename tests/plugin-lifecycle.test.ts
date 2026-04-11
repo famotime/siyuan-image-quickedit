@@ -92,3 +92,29 @@ test("mergeImagesForSuperBlock uploads merged image and inserts it after the sup
     expect.stringContaining("/assets/superblock-merge-1.webp"),
   );
 });
+
+test("refreshEditedImages keeps src and data-src aligned after local editor refresh", async () => {
+  const localEditor = await import("../src/services/local-editor.ts");
+  vi.spyOn(localEditor, "resolveLocalEditorImagePath").mockReturnValue("D:\\SiYuan\\workspace\\data\\assets\\demo.png");
+  vi.spyOn(localEditor, "createEditedImagePreviewUrl").mockResolvedValue("/assets/demo.png?t=200");
+
+  const { default: SiyuanImageQuickEditPlugin } = await import("../src/index.ts");
+  const plugin = new SiyuanImageQuickEditPlugin();
+  document.body.innerHTML = `
+    <div class="protyle-wysiwyg">
+      <div data-node-id="img-1"><img src="/assets/demo.png" data-src="/assets/demo.png"></div>
+    </div>
+  `;
+
+  const refreshedCount = await (plugin as any).refreshEditedImages(
+    "D:\\SiYuan\\workspace\\data\\assets\\demo.png",
+    "D:\\SiYuan\\workspace\\data",
+  );
+
+  const imageElement = document.querySelector("img") as HTMLImageElement;
+  const currentSrc = new URL(imageElement.src).pathname + new URL(imageElement.src).search;
+
+  expect(refreshedCount).toBe(1);
+  expect(currentSrc).toBe("/assets/demo.png?t=200");
+  expect(imageElement.dataset.src).toBe("/assets/demo.png?t=200");
+});
