@@ -19,6 +19,7 @@ test("ensurePluginSetting creates and assigns the plugin setting once", () => {
   const host: { name: string; setting?: { options: { width: string }; items: unknown[] } } = {
     name: "siyuan-image-quickedit",
   };
+  const createImageMenuToggleGroup = vi.fn(() => ({}) as HTMLElement);
   const createCommandToggleGroup = vi.fn(() => ({}) as HTMLElement);
   const createImageInfoNotificationToggle = vi.fn(() => ({}) as HTMLElement);
   const createLocalEditorPathInput = vi.fn(() => ({}) as HTMLElement);
@@ -26,6 +27,7 @@ test("ensurePluginSetting creates and assigns the plugin setting once", () => {
   const setting = ensurePluginSetting(
     host,
     MockSetting,
+    createImageMenuToggleGroup,
     createCommandToggleGroup,
     createImageInfoNotificationToggle,
     createLocalEditorPathInput,
@@ -33,6 +35,7 @@ test("ensurePluginSetting creates and assigns the plugin setting once", () => {
   const reusedSetting = ensurePluginSetting(
     host,
     MockSetting,
+    createImageMenuToggleGroup,
     createCommandToggleGroup,
     createImageInfoNotificationToggle,
     createLocalEditorPathInput,
@@ -49,6 +52,7 @@ test("ensurePluginSetting creates and assigns the plugin setting once", () => {
     "文档批量菜单（新增）",
     "文档批量菜单（替换）",
   ]);
+  expect(createImageMenuToggleGroup).not.toHaveBeenCalled();
   expect(createCommandToggleGroup).not.toHaveBeenCalled();
   expect(createImageInfoNotificationToggle).not.toHaveBeenCalled();
   expect(createLocalEditorPathInput).not.toHaveBeenCalled();

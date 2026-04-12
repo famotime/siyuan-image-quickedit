@@ -9,6 +9,7 @@ interface BuildImageQuickEditSubmenuItemsOptions {
   commandIds: CommandId[];
   imageInfoLabel: string;
   onCommandClick: (commandId: CommandId) => void;
+  onMergeSuperBlockImages?: () => void;
   onOpenLocalEditor?: () => void;
 }
 
@@ -21,6 +22,20 @@ interface BuildDocumentBatchSubmenuItemsOptions {
 export function buildImageQuickEditSubmenuItems(
   options: BuildImageQuickEditSubmenuItemsOptions,
 ): IMenu[] {
+  const actionItems: IMenu[] = [];
+  if (options.onOpenLocalEditor) {
+    actionItems.push({
+      click: () => options.onOpenLocalEditor?.(),
+      label: "使用本地编辑器编辑",
+    });
+  }
+
+  if (options.onMergeSuperBlockImages) {
+    actionItems.push(buildSuperBlockMergeMenuItem({
+      onClick: options.onMergeSuperBlockImages,
+    }));
+  }
+
   return [
     {
       label: options.imageInfoLabel,
@@ -29,16 +44,11 @@ export function buildImageQuickEditSubmenuItems(
     {
       type: "separator",
     },
-    ...(options.onOpenLocalEditor
-      ? [
-          {
-            click: () => options.onOpenLocalEditor?.(),
-            label: "使用本地编辑器编辑",
-          },
-          {
-            type: "separator" as const,
-          },
-        ]
+    ...actionItems,
+    ...(actionItems.length && options.commandIds.length
+      ? [{
+          type: "separator" as const,
+        }]
       : []),
     ...options.commandIds.map(commandId => ({
       click: () => options.onCommandClick(commandId),

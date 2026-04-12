@@ -20,6 +20,7 @@ type SettingHost<TSetting extends SettingLike> = {
 export function ensurePluginSetting<TSetting extends SettingLike>(
   host: SettingHost<TSetting>,
   SettingCtor: SettingConstructor<TSetting>,
+  createImageMenuToggleGroup: () => HTMLElement,
   createCommandToggleGroup: (settingKey: CommandMenuSettingKey) => HTMLElement,
   createImageInfoNotificationToggle: () => HTMLElement,
   createLocalEditorPathInput: () => HTMLElement,
@@ -45,8 +46,8 @@ export function ensurePluginSetting<TSetting extends SettingLike>(
     title: "图片信息通知",
   });
   setting.addItem({
-    createActionElement: () => createCommandToggleGroup("imageMenuCommands"),
-    description: "控制图片右键菜单里展示哪些单图操作。",
+    createActionElement: createImageMenuToggleGroup,
+    description: "控制图片右键菜单里展示哪些单图操作，以及是否显示超级块图片合并。",
     direction: "column",
     title: "图片右键菜单",
   });

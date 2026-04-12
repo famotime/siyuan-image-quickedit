@@ -21,7 +21,6 @@ import { buildBatchResultMessage } from "@/core/formatters.ts";
 import {
   buildDocumentBatchSubmenuItems,
   buildImageQuickEditSubmenuItems,
-  buildSuperBlockMergeMenuItem,
   syncReadonlyMenuItemLabelElement,
   type DocumentBatchMode,
 } from "@/core/menu-items.ts";
@@ -88,6 +87,7 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
     ensurePluginSetting(
       this,
       Setting,
+      this.createImageMenuToggleGroup.bind(this),
       this.createCommandToggleGroup.bind(this),
       this.createImageInfoNotificationToggle.bind(this),
       this.createLocalEditorPathInput.bind(this),
@@ -128,6 +128,7 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
     ensurePluginSetting(
       this,
       Setting,
+      this.createImageMenuToggleGroup.bind(this),
       this.createCommandToggleGroup.bind(this),
       this.createImageInfoNotificationToggle.bind(this),
       this.createLocalEditorPathInput.bind(this),
@@ -165,6 +166,20 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
       wrapper.append(label);
     }
 
+    return wrapper;
+  }
+
+  private createImageMenuToggleGroup(): HTMLElement {
+    const wrapper = this.createCommandToggleGroup("imageMenuCommands");
+    wrapper.append(this.createSettingCheckboxOption({
+      checked: this.settings.showSuperBlockMergeMenuItem,
+      label: "超级块图片合并",
+      onChange: (checked) => {
+        this.persistSettings({
+          showSuperBlockMergeMenuItem: checked,
+        });
+      },
+    }));
     return wrapper;
   }
 
@@ -207,20 +222,34 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
   }
 
   private createImageInfoNotificationToggle(): HTMLElement {
+    return this.createSettingCheckboxOption({
+      checked: this.settings.showImageInfoNotification,
+      label: "右键显示图片信息通知",
+      onChange: (checked) => {
+        this.persistSettings({
+          showImageInfoNotification: checked,
+        });
+      },
+    });
+  }
+
+  private createSettingCheckboxOption(options: {
+    checked: boolean;
+    label: string;
+    onChange: (checked: boolean) => void;
+  }): HTMLElement {
     const wrapper = document.createElement("label");
     wrapper.className = "image-quickedit-setting-option";
 
     const checkbox = document.createElement("input");
-    checkbox.checked = this.settings.showImageInfoNotification;
+    checkbox.checked = options.checked;
     checkbox.type = "checkbox";
     checkbox.addEventListener("change", () => {
-      this.persistSettings({
-        showImageInfoNotification: checkbox.checked,
-      });
+      options.onChange(checkbox.checked);
     });
 
     const text = document.createElement("span");
-    text.textContent = "右键显示图片信息通知";
+    text.textContent = options.label;
 
     wrapper.append(checkbox, text);
     return wrapper;
@@ -235,31 +264,35 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
     const superBlockElement = detail.blockElements.find(
       blockElement => blockElement.dataset.type === "NodeSuperBlock",
     );
-    if (superBlockElement) {
-      const targets = collectSuperBlockImageTargets(superBlockElement);
-      if (targets.length >= 2) {
-        detail.menu.addItem(buildSuperBlockMergeMenuItem({
-          onClick: () => {
-            void this.runExclusive(async () => this.mergeImagesForSuperBlock(superBlockElement));
-          },
-        }));
-      }
-    }
-
     const target = resolveImageTargetFromBlockElements(detail.blockElements);
-    this.decorateSingleImageMenu(detail.menu, target);
+    const shouldShowSuperBlockMerge = Boolean(
+      superBlockElement
+      && this.settings.showSuperBlockMergeMenuItem
+      && collectSuperBlockImageTargets(superBlockElement).length >= 2,
+    );
+
+    this.decorateSingleImageMenu(detail.menu, target, {
+      onMergeSuperBlockImages: shouldShowSuperBlockMerge
+        ? () => {
+            void this.runExclusive(async () => this.mergeImagesForSuperBlock(superBlockElement as HTMLElement));
+          }
+        : undefined,
+    });
   }
 
   private decorateSingleImageMenu(
     menu: IEventBusMap["open-menu-image"]["menu"] | IEventBusMap["click-blockicon"]["menu"],
     target: ImageTarget | null,
+    options?: {
+      onMergeSuperBlockImages?: () => void;
+    },
   ): void {
     if (!target) {
       return;
     }
 
     const enabledCommands = getEnabledCommandIds(this.settings.imageMenuCommands);
-    if (!enabledCommands.length) {
+    if (!enabledCommands.length && !options?.onMergeSuperBlockImages) {
       return;
     }
 
@@ -270,6 +303,7 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
       onCommandClick: (commandId) => {
         void this.runExclusive(async () => this.processSingleTarget(target, commandId));
       },
+      onMergeSuperBlockImages: options?.onMergeSuperBlockImages,
       onOpenLocalEditor: () => {
         void this.runExclusive(async () => this.editImageWithLocalEditor(target));
       },

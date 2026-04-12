@@ -12,11 +12,12 @@ test("buildImageQuickEditSubmenuItems prepends readonly image info before comman
   const items = buildImageQuickEditSubmenuItems({
     commandIds: ["convert-webp", "compress-75", "compress-50"],
     imageInfoLabel: "230.13 KB，1024×572×24 (1.79)",
+    onMergeSuperBlockImages: () => undefined,
     onOpenLocalEditor: () => undefined,
     onCommandClick: () => undefined,
   });
 
-  expect(items).toHaveLength(7);
+  expect(items).toHaveLength(8);
   expect(items[0]).toMatchObject({
     label: "230.13 KB，1024×572×24 (1.79)",
     type: "readonly",
@@ -28,15 +29,18 @@ test("buildImageQuickEditSubmenuItems prepends readonly image info before comman
     label: "使用本地编辑器编辑",
   });
   expect(items[3]).toMatchObject({
-    type: "separator",
+    label: "图片合并",
   });
   expect(items[4]).toMatchObject({
-    label: "转为 WebP 格式",
+    type: "separator",
   });
   expect(items[5]).toMatchObject({
-    label: "压缩到 75%",
+    label: "转为 WebP 格式",
   });
   expect(items[6]).toMatchObject({
+    label: "压缩到 75%",
+  });
+  expect(items[7]).toMatchObject({
     label: "压缩到 50%",
   });
 });

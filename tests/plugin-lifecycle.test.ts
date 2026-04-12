@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { afterEach, expect, test, vi } from "vitest";
 
+import { mergeSettings } from "../src/core/command-settings.ts";
+
 afterEach(() => {
   vi.clearAllMocks();
   vi.resetModules();
@@ -19,7 +21,7 @@ test("uninstall removes persisted settings data", async () => {
   expect(removeData).toHaveBeenCalledWith("settings.json");
 });
 
-test("click-blockicon adds image merge menu item for super block with multiple images", async () => {
+test("click-blockicon nests image merge under the image quick edit submenu for super block with multiple images", async () => {
   const addItem = vi.fn();
   const { default: SiyuanImageQuickEditPlugin } = await import("../src/index.ts");
   const plugin = new SiyuanImageQuickEditPlugin();
@@ -36,8 +38,45 @@ test("click-blockicon adds image merge menu item for super block with multiple i
     menu: { addItem },
   });
 
+  expect(addItem).toHaveBeenCalledTimes(1);
   expect(addItem).toHaveBeenCalledWith(expect.objectContaining({
-    label: "图片合并",
+    label: "图片快剪",
+    submenu: expect.arrayContaining([
+      expect.objectContaining({
+        label: "图片合并",
+      }),
+    ]),
+  }));
+});
+
+test("click-blockicon hides image merge inside the image quick edit submenu when the setting is disabled", async () => {
+  const addItem = vi.fn();
+  const { default: SiyuanImageQuickEditPlugin } = await import("../src/index.ts");
+  const plugin = new SiyuanImageQuickEditPlugin();
+  (plugin as any).settings = mergeSettings({
+    showSuperBlockMergeMenuItem: false,
+  });
+  const blockElement = document.createElement("div");
+  blockElement.dataset.nodeId = "super-1";
+  blockElement.dataset.type = "NodeSuperBlock";
+  blockElement.innerHTML = `
+    <div data-node-id="img-1"><img src="/assets/1.png"></div>
+    <div data-node-id="img-2"><img src="/assets/2.png"></div>
+  `;
+
+  (plugin as any).decorateBlockIconMenu({
+    blockElements: [blockElement],
+    menu: { addItem },
+  });
+
+  expect(addItem).toHaveBeenCalledTimes(1);
+  expect(addItem).toHaveBeenCalledWith(expect.objectContaining({
+    label: "图片快剪",
+    submenu: expect.not.arrayContaining([
+      expect.objectContaining({
+        label: "图片合并",
+      }),
+    ]),
   }));
 });
 
@@ -55,8 +94,38 @@ test("click-blockicon does not add image merge menu item when super block has fe
     menu: { addItem },
   });
 
-  expect(addItem).not.toHaveBeenCalledWith(expect.objectContaining({
-    label: "图片合并",
+  expect(addItem).toHaveBeenCalledWith(expect.objectContaining({
+    label: "图片快剪",
+    submenu: expect.not.arrayContaining([
+      expect.objectContaining({
+        label: "图片合并",
+      }),
+    ]),
+  }));
+});
+
+test("createImageMenuToggleGroup includes the super block merge toggle and persists updates", async () => {
+  const saveData = vi.fn().mockResolvedValue(undefined);
+  const { default: SiyuanImageQuickEditPlugin } = await import("../src/index.ts");
+  const plugin = new SiyuanImageQuickEditPlugin();
+  (plugin as any).saveData = saveData;
+  (plugin as any).settings = mergeSettings();
+
+  const wrapper = (plugin as any).createImageMenuToggleGroup();
+  const labels = Array.from(wrapper.querySelectorAll("label"));
+  const mergeOption = labels.find(label => label.textContent?.includes("超级块图片合并"));
+
+  expect(mergeOption).toBeTruthy();
+
+  const checkbox = mergeOption?.querySelector("input") as HTMLInputElement;
+  expect(checkbox.checked).toBe(true);
+
+  checkbox.checked = false;
+  checkbox.dispatchEvent(new Event("change"));
+
+  expect((plugin as any).settings.showSuperBlockMergeMenuItem).toBe(false);
+  expect(saveData).toHaveBeenCalledWith("settings.json", expect.objectContaining({
+    showSuperBlockMergeMenuItem: false,
   }));
 });
 
