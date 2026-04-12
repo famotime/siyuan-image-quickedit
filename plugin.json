@@ -2,7 +2,7 @@
   "name": "siyuan-image-quickedit",
   "author": "Quincy Zou",
   "url": "https://github.com/famotime/siyuan-image-quickedit",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "minAppVersion": "2.10.14",
   "disabledInPublish": true,
   "backends": [
@@ -15,7 +15,7 @@
     "default": "思源图片快剪"
   },
   "description": {
-    "default": "为思源笔记中的图片提供快速转换、压缩和批量处理能力。"
+    "default": "为思源笔记中的图片提供快速查看、转换、压缩和批量处理能力，缓解你的笔记存储焦虑。"
   },
   "readme": {
     "default": "README.md"

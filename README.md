@@ -26,3 +26,7 @@
 ![image](https://raw.githubusercontent.com/famotime/siyuan-image-quickedit/main/assets/image-20260328211631-894yjrs.png)
 
 ![image](https://raw.githubusercontent.com/famotime/siyuan-image-quickedit/main/assets/image-20260328211922-03ihi5z.png)
+
+---
+
+插件使用问题可以在这个帖子反馈：[一个小插件，缓解你的笔记存储焦虑 - 链滴](https://ld246.com/article/1774704617700)
