@@ -645,7 +645,7 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
 
       const previewUrl = await createEditedImagePreviewUrl(stableSrc);
       this.replaceLocalEditorPreviewUrl(imageElement, previewUrl);
-      imageElement.dataset.src = previewUrl;
+      imageElement.dataset.src = stableSrc;
 
       refreshedCount += 1;
     }
@@ -676,6 +676,7 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
     }
 
     this.localEditorPreviewUrls.set(imageElement, previewUrl);
+    imageElement.removeAttribute("src");
     imageElement.src = previewUrl;
   }
 

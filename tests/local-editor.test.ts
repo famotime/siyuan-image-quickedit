@@ -6,7 +6,6 @@ import { expect, test } from "vitest";
 import { afterEach, vi } from "vitest";
 
 import {
-  buildCacheBustedImageSrc,
   cleanupLocalEditorEditSession,
   commitLocalEditorEditSession,
   createEditedImagePreviewUrl,
@@ -44,22 +43,14 @@ test("resolveLocalEditorImagePath accepts file protocol paths directly", () => {
   expect(imagePath).toBe("D:\\Images\\demo.png");
 });
 
-test("buildCacheBustedImageSrc replaces an existing timestamp query", () => {
-  expect(buildCacheBustedImageSrc("/assets/demo.png?t=100&foo=bar", 200)).toBe(
-    "/assets/demo.png?foo=bar&t=200",
-  );
-});
-
 test("removeCacheBustingSearchParam keeps the persisted image path stable", () => {
   expect(removeCacheBustingSearchParam("/assets/demo.png?t=100&foo=bar")).toBe(
-    "/assets/demo.png?foo=bar",
+    "assets/demo.png?foo=bar",
   );
 });
 
-test("createEditedImagePreviewUrl keeps assets urls cache-busted instead of converting them to blob urls", async () => {
-  vi.spyOn(Date, "now").mockReturnValue(200);
+test("createEditedImagePreviewUrl refreshes cache and returns a stable asset url", async () => {
   const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({
-    blob: async () => new Blob(["image"]),
     ok: true,
   } as Response);
   const createObjectURL = vi.fn(() => "blob:http://127.0.0.1:6806/preview");
@@ -69,10 +60,24 @@ test("createEditedImagePreviewUrl keeps assets urls cache-busted instead of conv
   });
 
   await expect(createEditedImagePreviewUrl("/assets/demo.png?foo=bar")).resolves.toBe(
-    "/assets/demo.png?foo=bar&t=200",
+    "assets/demo.png?foo=bar",
+  );
+  expect(fetchSpy).toHaveBeenCalledWith(
+    "/assets/demo.png?foo=bar",
+    { cache: "reload" },
+  );
+  expect(createObjectURL).not.toHaveBeenCalled();
+});
+
+test("createEditedImagePreviewUrl keeps file urls stable without fetch cache refresh", async () => {
+  const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+    ok: true,
+  } as Response);
+
+  await expect(createEditedImagePreviewUrl("file:///D:/Images/demo.png?t=100")).resolves.toBe(
+    "file:///D:/Images/demo.png",
   );
   expect(fetchSpy).not.toHaveBeenCalled();
-  expect(createObjectURL).not.toHaveBeenCalled();
 });
 
 test("workspace assets are edited through a temporary copy and written back after the editor closes", async () => {

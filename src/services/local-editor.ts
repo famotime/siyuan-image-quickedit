@@ -118,14 +118,6 @@ export async function cleanupLocalEditorEditSession(session: LocalEditorEditSess
   delete session.tempPath;
 }
 
-export function buildCacheBustedImageSrc(imageSrc: string, timestamp = Date.now()): string {
-  const parsedUrl = createUrlWithCurrentOrigin(imageSrc);
-  parsedUrl.searchParams.delete("t");
-  parsedUrl.searchParams.set("t", String(timestamp));
-
-  return serializeUrlForCurrentOrigin(parsedUrl);
-}
-
 export function removeCacheBustingSearchParam(imageSrc: string): string {
   const parsedUrl = createUrlWithCurrentOrigin(imageSrc);
   parsedUrl.searchParams.delete("t");
@@ -134,7 +126,20 @@ export function removeCacheBustingSearchParam(imageSrc: string): string {
 }
 
 export async function createEditedImagePreviewUrl(imageSrc: string): Promise<string> {
-  return buildCacheBustedImageSrc(removeCacheBustingSearchParam(imageSrc));
+  const stableSrc = removeCacheBustingSearchParam(imageSrc);
+  const parsedStableUrl = createUrlWithCurrentOrigin(stableSrc);
+  if (!["http:", "https:"].includes(parsedStableUrl.protocol)) {
+    return stableSrc;
+  }
+
+  const response = await fetch(serializeUrlForFetch(parsedStableUrl), {
+    cache: "reload",
+  });
+  if (!response.ok) {
+    throw new Error(`无法刷新编辑后的图片预览：${response.status}`);
+  }
+
+  return stableSrc;
 }
 
 export async function openLocalEditorAndWait(options: LaunchLocalEditorOptions): Promise<void> {
@@ -170,6 +175,18 @@ function createUrlWithCurrentOrigin(imageSrc: string): URL {
 }
 
 function serializeUrlForCurrentOrigin(parsedUrl: URL): string {
+  const currentOrigin = getCurrentOrigin();
+  if (parsedUrl.origin === currentOrigin) {
+    const pathname = parsedUrl.pathname.startsWith("/assets/")
+      ? parsedUrl.pathname.slice(1)
+      : parsedUrl.pathname;
+    return `${pathname}${parsedUrl.search}`;
+  }
+
+  return parsedUrl.toString();
+}
+
+function serializeUrlForFetch(parsedUrl: URL): string {
   const currentOrigin = getCurrentOrigin();
   if (parsedUrl.origin === currentOrigin) {
     return `${parsedUrl.pathname}${parsedUrl.search}`;
