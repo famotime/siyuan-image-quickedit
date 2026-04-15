@@ -14,4 +14,8 @@ export async function fetchSyncPost(..._args: unknown[]) {
   };
 }
 
+export function getActiveEditor() {
+  return undefined;
+}
+
 export function showMessage(..._args: unknown[]) {}

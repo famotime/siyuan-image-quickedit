@@ -3,6 +3,7 @@ import {
   Plugin,
   Setting,
   confirm,
+  getActiveEditor,
   showMessage,
 } from "siyuan";
 
@@ -24,6 +25,15 @@ import {
   syncReadonlyMenuItemLabelElement,
   type DocumentBatchMode,
 } from "@/core/menu-items.ts";
+import {
+  createPowerButtonsProvider,
+  parsePublicPowerButtonsCommandId,
+} from "@/core/power-buttons-provider.ts";
+import type {
+  PowerButtonsCommandProvider,
+  PowerButtonsInvokeContext,
+  PowerButtonsInvokeResult,
+} from "@/core/power-buttons-provider-types.ts";
 import { ensurePluginSetting } from "@/core/plugin-setting.ts";
 import { runTargetsSequentially } from "@/core/task-runner.ts";
 import {
@@ -65,6 +75,10 @@ const LOCAL_EDITOR_REFRESH_DELAY_MS = 200;
 export default class SiyuanImageQuickEditPlugin extends Plugin {
   private readonly imageInfoCache = new Map<string, string>();
   private readonly localEditorPreviewUrls = new Map<HTMLImageElement, string>();
+  private readonly powerButtonsProvider: PowerButtonsCommandProvider = createPowerButtonsProvider({
+    invokeCommand: (commandId, context) => this.invokePowerButtonsCommand(commandId, context),
+    pluginVersion: PluginInfo.version,
+  });
   private isProcessing = false;
   private settings: PluginSettings = DEFAULT_SETTINGS;
 
@@ -133,6 +147,10 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
       this.createImageInfoNotificationToggle.bind(this),
       this.createLocalEditorPathInput.bind(this),
     ).open(this.name);
+  }
+
+  public getPowerButtonsIntegration(): PowerButtonsCommandProvider {
+    return this.powerButtonsProvider;
   }
 
   private createCommandToggleGroup(settingKey: CommandMenuSettingKey): HTMLElement {
@@ -389,19 +407,25 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
     });
   }
 
-  private async runExclusive(task: () => Promise<void>): Promise<void> {
+  private runExclusive(task: () => Promise<void>): boolean {
     if (this.isProcessing) {
       showMessage("图片快剪正在处理，请等待当前任务完成。", 4000, "error");
-      return;
+      return false;
     }
 
     this.isProcessing = true;
-    try {
-      await task();
-    }
-    finally {
-      this.isProcessing = false;
-    }
+    void (async () => {
+      try {
+        await task();
+      }
+      catch (error) {
+        console.error("[siyuan-image-quickedit] Unexpected task failure", error);
+      }
+      finally {
+        this.isProcessing = false;
+      }
+    })();
+    return true;
   }
 
   private reportProgress(message: string): void {
@@ -686,5 +710,201 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
     }
 
     this.localEditorPreviewUrls.clear();
+  }
+
+  private async invokePowerButtonsCommand(
+    commandId: string,
+    _context: PowerButtonsInvokeContext,
+  ): Promise<PowerButtonsInvokeResult> {
+    const command = parsePublicPowerButtonsCommandId(commandId);
+    if (!command) {
+      return {
+        errorCode: "command-not-found",
+        message: `未找到公开命令：${commandId}`,
+        ok: false,
+      };
+    }
+
+    if (command.kind === "current-image-local-editor") {
+      const target = this.resolvePowerButtonsCurrentImageTarget();
+      if (!target) {
+        return {
+          errorCode: "context-unavailable",
+          message: "请先选中图片，再使用本地编辑器编辑。",
+          ok: false,
+        };
+      }
+
+      return this.startPowerButtonsTask(async () => this.editImageWithLocalEditor(target));
+    }
+
+    if (command.kind === "current-image-command") {
+      const target = this.resolvePowerButtonsCurrentImageTarget();
+      if (!target) {
+        return {
+          errorCode: "context-unavailable",
+          message: "请先选中图片，再执行该操作。",
+          ok: false,
+        };
+      }
+
+      return this.startPowerButtonsTask(async () => this.processSingleTarget(target, command.commandId));
+    }
+
+    if (command.kind === "current-super-block-merge") {
+      const superBlockElement = this.resolvePowerButtonsCurrentSuperBlockElement();
+      if (!superBlockElement || collectSuperBlockImageTargets(superBlockElement).length < 2) {
+        return {
+          errorCode: "context-unavailable",
+          message: "请先选中包含至少两张图片的超级块，再执行图片合并。",
+          ok: false,
+        };
+      }
+
+      return this.startPowerButtonsTask(async () => this.mergeImagesForSuperBlock(superBlockElement));
+    }
+
+    const protyle = this.resolvePowerButtonsProtyle();
+    if (!protyle) {
+      return {
+        errorCode: "context-unavailable",
+        message: "请先打开包含图片的文档，再执行该操作。",
+        ok: false,
+      };
+    }
+
+    const targets = collectImageTargets(protyle);
+    if (!targets.length) {
+      return {
+        errorCode: "context-unavailable",
+        message: "当前文档中没有可处理的图片。请先打开包含图片的文档，再执行该操作。",
+        ok: false,
+      };
+    }
+
+    const commandLabel = command.mode === "replace"
+      ? COMMAND_DEFINITIONS[command.commandId].replaceBatchLabel
+      : COMMAND_DEFINITIONS[command.commandId].insertBatchLabel;
+    const detail = command.mode === "replace"
+      ? "原图将被直接替换，正文文本保持不变。"
+      : "原图不会删除，处理结果会插入到对应图片块后方。";
+    const confirmed = await this.askConfirm(
+      "思源图片快剪",
+      `将对本文档中的 ${targets.length} 张图片执行“${commandLabel}”。${detail}`,
+    );
+    if (!confirmed) {
+      return {
+        alreadyNotified: true,
+        errorCode: "execution-failed",
+        ok: false,
+      };
+    }
+
+    return this.startPowerButtonsTask(async () => this.processDocumentTargets(targets, command.commandId, command.mode));
+  }
+
+  private startPowerButtonsTask(task: () => Promise<void>): PowerButtonsInvokeResult {
+    const started = this.runExclusive(task);
+    if (!started) {
+      return {
+        alreadyNotified: true,
+        errorCode: "provider-unavailable",
+        message: "图片快剪正在处理，请等待当前任务完成。",
+        ok: false,
+      };
+    }
+
+    return {
+      alreadyNotified: true,
+      ok: true,
+    };
+  }
+
+  private async askConfirm(title: string, text: string): Promise<boolean> {
+    return new Promise((resolve) => {
+      confirm(
+        title,
+        text,
+        () => resolve(true),
+        () => resolve(false),
+      );
+    });
+  }
+
+  private resolvePowerButtonsCurrentImageTarget(): ImageTarget | null {
+    const selectedBlockTarget = resolveImageTargetFromBlockElements(this.getSelectedBlockElements());
+    if (selectedBlockTarget) {
+      return selectedBlockTarget;
+    }
+
+    for (const candidate of this.getPowerButtonsContextElements()) {
+      const target = resolveImageTarget(candidate);
+      if (target) {
+        return target;
+      }
+    }
+
+    return null;
+  }
+
+  private resolvePowerButtonsCurrentSuperBlockElement(): HTMLElement | null {
+    for (const blockElement of this.getSelectedBlockElements()) {
+      if (blockElement.dataset.type === "NodeSuperBlock") {
+        return blockElement;
+      }
+
+      const superBlockElement = blockElement.closest<HTMLElement>("[data-type='NodeSuperBlock']");
+      if (superBlockElement) {
+        return superBlockElement;
+      }
+    }
+
+    for (const candidate of this.getPowerButtonsContextElements()) {
+      const superBlockElement = candidate.closest<HTMLElement>("[data-type='NodeSuperBlock']");
+      if (superBlockElement) {
+        return superBlockElement;
+      }
+    }
+
+    return null;
+  }
+
+  private resolvePowerButtonsProtyle(): IProtyle | null {
+    const activeEditor = getActiveEditor();
+    const protyle = activeEditor?.protyle as IProtyle | undefined;
+    if (!protyle) {
+      return null;
+    }
+
+    if (protyle.contentElement || protyle.element) {
+      return protyle;
+    }
+
+    return null;
+  }
+
+  private getSelectedBlockElements(): HTMLElement[] {
+    return Array.from(document.querySelectorAll<HTMLElement>(
+      "[data-node-id].protyle-wysiwyg--select, [data-node-id].protyle-select",
+    ));
+  }
+
+  private getPowerButtonsContextElements(): HTMLElement[] {
+    const elements: HTMLElement[] = [];
+    const activeElement = document.activeElement;
+    if (activeElement instanceof HTMLElement) {
+      elements.push(activeElement);
+    }
+
+    const selection = window.getSelection?.();
+    const anchorNode = selection?.anchorNode;
+    if (anchorNode instanceof HTMLElement) {
+      elements.push(anchorNode);
+    }
+    else if (anchorNode?.parentElement instanceof HTMLElement) {
+      elements.push(anchorNode.parentElement);
+    }
+
+    return elements;
   }
 }
