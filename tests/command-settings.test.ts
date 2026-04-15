@@ -14,6 +14,11 @@ test("mergeSettings fills missing menu toggles with defaults", () => {
     localEditorPath: "C:\\Program Files\\paint.net\\PaintDotNet.exe",
     showSuperBlockMergeMenuItem: false,
     showImageInfoNotification: true,
+    superBlockMergeOptions: {
+      borderColor: "#ff0000",
+      borderWidthPx: 2,
+      gapPx: 12,
+    },
     imageMenuCommands: {
       "compress-10": false,
     },
@@ -37,6 +42,11 @@ test("mergeSettings fills missing menu toggles with defaults", () => {
   expect(settings.localEditorPath).toBe("C:\\Program Files\\paint.net\\PaintDotNet.exe");
   expect(settings.showSuperBlockMergeMenuItem).toBe(false);
   expect(settings.showImageInfoNotification).toBe(true);
+  expect(settings.superBlockMergeOptions).toEqual({
+    borderColor: "#ff0000",
+    borderWidthPx: 2,
+    gapPx: 12,
+  });
 });
 
 test("mergeSettings migrates legacy document menu toggles to both document menu groups", () => {
@@ -67,6 +77,21 @@ test("mergeSettings migrates legacy document menu toggles to both document menu 
   expect(settings.localEditorPath).toBe("");
   expect(settings.showSuperBlockMergeMenuItem).toBe(true);
   expect(settings.showImageInfoNotification).toBe(false);
+  expect(settings.superBlockMergeOptions).toEqual(DEFAULT_SETTINGS.superBlockMergeOptions);
+});
+
+test("mergeSettings fills missing super block merge options with defaults", () => {
+  const settings = mergeSettings({
+    superBlockMergeOptions: {
+      gapPx: 8,
+    },
+  });
+
+  expect(settings.superBlockMergeOptions).toEqual({
+    borderColor: "#000000",
+    borderWidthPx: 0,
+    gapPx: 8,
+  });
 });
 
 test("getEnabledCommandIds keeps PRD command order and filters disabled items", () => {

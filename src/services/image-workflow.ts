@@ -1,7 +1,11 @@
 import type { IProtyle } from "siyuan";
 
 import { COMMAND_DEFINITIONS } from "@/core/command-meta.ts";
-import type { CommandId } from "@/core/command-settings.ts";
+import {
+  DEFAULT_SUPER_BLOCK_MERGE_OPTIONS,
+  type CommandId,
+  type SuperBlockMergeOptions,
+} from "@/core/command-settings.ts";
 import { buildImageInfoLabel, buildResultMarkdown } from "@/core/formatters.ts";
 import { replaceImageSourceInMarkdown } from "@/core/image-markdown.ts";
 import { loadDocumentEmbeddedAssetBytes } from "@/services/document-asset-stats.ts";
@@ -547,9 +551,21 @@ export function collectSuperBlockImageTargets(superBlockElement: HTMLElement): I
 
 export async function mergeBitmapsHorizontallyTopAligned(
   bitmaps: ImageBitmap[],
+  options: SuperBlockMergeOptions = DEFAULT_SUPER_BLOCK_MERGE_OPTIONS,
 ): Promise<{ blob: Blob; height: number; width: number }> {
-  const width = bitmaps.reduce((total, bitmap) => total + bitmap.width, 0);
-  const height = bitmaps.reduce((max, bitmap) => Math.max(max, bitmap.height), 0);
+  const resolvedOptions = {
+    ...DEFAULT_SUPER_BLOCK_MERGE_OPTIONS,
+    ...options,
+  };
+  const width = bitmaps.reduce((total, bitmap, index) => {
+    return total
+      + bitmap.width
+      + resolvedOptions.borderWidthPx * 2
+      + (index > 0 ? resolvedOptions.gapPx : 0);
+  }, 0);
+  const height = bitmaps.reduce((max, bitmap) => {
+    return Math.max(max, bitmap.height + resolvedOptions.borderWidthPx * 2);
+  }, 0);
   const canvas = createCanvas(width, height);
   const context = canvas.getContext("2d");
   if (!context) {
@@ -558,8 +574,22 @@ export async function mergeBitmapsHorizontallyTopAligned(
 
   let offsetX = 0;
   for (const bitmap of bitmaps) {
-    context.drawImage(bitmap, offsetX, 0, bitmap.width, bitmap.height);
-    offsetX += bitmap.width;
+    const outerWidth = bitmap.width + resolvedOptions.borderWidthPx * 2;
+    const outerHeight = bitmap.height + resolvedOptions.borderWidthPx * 2;
+
+    if (resolvedOptions.borderWidthPx > 0) {
+      context.fillStyle = resolvedOptions.borderColor;
+      context.fillRect(offsetX, 0, outerWidth, outerHeight);
+    }
+
+    context.drawImage(
+      bitmap,
+      offsetX + resolvedOptions.borderWidthPx,
+      resolvedOptions.borderWidthPx,
+      bitmap.width,
+      bitmap.height,
+    );
+    offsetX += outerWidth + resolvedOptions.gapPx;
   }
 
   return {
@@ -569,7 +599,10 @@ export async function mergeBitmapsHorizontallyTopAligned(
   };
 }
 
-export async function mergeSuperBlockImages(targets: ImageTarget[]): Promise<SuperBlockMergedImageResult> {
+export async function mergeSuperBlockImages(
+  targets: ImageTarget[],
+  options: SuperBlockMergeOptions = DEFAULT_SUPER_BLOCK_MERGE_OPTIONS,
+): Promise<SuperBlockMergedImageResult> {
   if (targets.length < 2) {
     throw new Error("超级块中至少需要两张图片才能合并。");
   }
@@ -582,7 +615,7 @@ export async function mergeSuperBlockImages(targets: ImageTarget[]): Promise<Sup
       bitmaps.push(bitmap);
     }
 
-    const merged = await mergeBitmapsHorizontallyTopAligned(bitmaps);
+    const merged = await mergeBitmapsHorizontallyTopAligned(bitmaps, options);
 
     return {
       fileName: `superblock-merge-${Date.now()}.webp`,

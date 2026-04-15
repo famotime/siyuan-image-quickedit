@@ -129,6 +129,45 @@ test("createImageMenuToggleGroup includes the super block merge toggle and persi
   }));
 });
 
+test("createSuperBlockMergeOptionsGroup persists gap, border width, and border color", async () => {
+  const saveData = vi.fn().mockResolvedValue(undefined);
+  const { default: SiyuanImageQuickEditPlugin } = await import("../src/index.ts");
+  const plugin = new SiyuanImageQuickEditPlugin();
+  (plugin as any).saveData = saveData;
+  (plugin as any).settings = mergeSettings();
+
+  const wrapper = (plugin as any).createSuperBlockMergeOptionsGroup();
+  const inputs = Array.from(wrapper.querySelectorAll("input")) as HTMLInputElement[];
+  const gapInput = inputs.find(input => input.type === "number" && input.value === "0") as HTMLInputElement;
+  const colorInput = inputs.find(input => input.type === "color") as HTMLInputElement;
+  const borderWidthInput = inputs.find(input => input !== gapInput && input.type === "number") as HTMLInputElement;
+
+  expect(gapInput).toBeTruthy();
+  expect(borderWidthInput).toBeTruthy();
+  expect(colorInput).toBeTruthy();
+  expect(colorInput.value).toBe("#000000");
+
+  gapInput.value = "6";
+  gapInput.dispatchEvent(new Event("change"));
+  borderWidthInput.value = "2";
+  borderWidthInput.dispatchEvent(new Event("change"));
+  colorInput.value = "#00ff88";
+  colorInput.dispatchEvent(new Event("change"));
+
+  expect((plugin as any).settings.superBlockMergeOptions).toEqual({
+    borderColor: "#00ff88",
+    borderWidthPx: 2,
+    gapPx: 6,
+  });
+  expect(saveData).toHaveBeenLastCalledWith("settings.json", expect.objectContaining({
+    superBlockMergeOptions: {
+      borderColor: "#00ff88",
+      borderWidthPx: 2,
+      gapPx: 6,
+    },
+  }));
+});
+
 test("mergeImagesForSuperBlock uploads merged image and inserts it after the super block", async () => {
   const kernel = await import("../src/services/kernel.ts");
   const workflow = await import("../src/services/image-workflow.ts");
@@ -155,6 +194,15 @@ test("mergeImagesForSuperBlock uploads merged image and inserts it after the sup
   superBlockElement.dataset.nodeId = "super-1";
 
   await (plugin as any).mergeImagesForSuperBlock(superBlockElement);
+
+  expect(workflow.mergeSuperBlockImages).toHaveBeenCalledWith(
+    expect.any(Array),
+    expect.objectContaining({
+      borderColor: "#000000",
+      borderWidthPx: 0,
+      gapPx: 0,
+    }),
+  );
 
   expect(insertMarkdownAfterBlock).toHaveBeenCalledWith(
     "super-1",

@@ -12,9 +12,11 @@ import { COMMAND_DEFINITIONS } from "@/core/command-meta.ts";
 import {
   COMMAND_ORDER,
   DEFAULT_SETTINGS,
+  DEFAULT_SUPER_BLOCK_MERGE_OPTIONS,
   type CommandMenuSettingKey,
   type CommandId,
   type PluginSettings,
+  type SuperBlockMergeOptions,
   getEnabledCommandIds,
   mergeSettings,
 } from "@/core/command-settings.ts";
@@ -105,6 +107,7 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
       this.createCommandToggleGroup.bind(this),
       this.createImageInfoNotificationToggle.bind(this),
       this.createLocalEditorPathInput.bind(this),
+      this.createSuperBlockMergeOptionsGroup.bind(this),
     );
 
     this.eventBus.on("open-menu-image", this.onImageMenu);
@@ -146,6 +149,7 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
       this.createCommandToggleGroup.bind(this),
       this.createImageInfoNotificationToggle.bind(this),
       this.createLocalEditorPathInput.bind(this),
+      this.createSuperBlockMergeOptionsGroup.bind(this),
     ).open(this.name);
   }
 
@@ -251,6 +255,43 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
     });
   }
 
+  private createSuperBlockMergeOptionsGroup(): HTMLElement {
+    const wrapper = document.createElement("div");
+    wrapper.className = "image-quickedit-setting-group";
+
+    wrapper.append(
+      this.createSettingNumberInputOption({
+        initialValue: this.settings.superBlockMergeOptions.gapPx,
+        label: "图片间距（px）",
+        onChange: (value) => {
+          this.persistSuperBlockMergeOptions({
+            gapPx: value,
+          });
+        },
+      }),
+      this.createSettingNumberInputOption({
+        initialValue: this.settings.superBlockMergeOptions.borderWidthPx,
+        label: "图片边框宽度（px）",
+        onChange: (value) => {
+          this.persistSuperBlockMergeOptions({
+            borderWidthPx: value,
+          });
+        },
+      }),
+      this.createSettingColorInputOption({
+        initialValue: this.settings.superBlockMergeOptions.borderColor,
+        label: "图片边框颜色",
+        onChange: (value) => {
+          this.persistSuperBlockMergeOptions({
+            borderColor: value,
+          });
+        },
+      }),
+    );
+
+    return wrapper;
+  }
+
   private createSettingCheckboxOption(options: {
     checked: boolean;
     label: string;
@@ -270,6 +311,61 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
     text.textContent = options.label;
 
     wrapper.append(checkbox, text);
+    return wrapper;
+  }
+
+  private createSettingNumberInputOption(options: {
+    initialValue: number;
+    label: string;
+    onChange: (value: number) => void;
+  }): HTMLElement {
+    const wrapper = document.createElement("label");
+    wrapper.className = "image-quickedit-setting-field";
+
+    const text = document.createElement("span");
+    text.textContent = options.label;
+
+    const input = document.createElement("input");
+    input.className = "b3-text-field fn__block";
+    input.min = "0";
+    input.step = "1";
+    input.type = "number";
+    input.value = String(options.initialValue);
+
+    const save = () => {
+      input.value = String(this.normalizeNonNegativeIntegerInput(input.value));
+      options.onChange(Number.parseInt(input.value, 10));
+    };
+
+    input.addEventListener("change", save);
+    input.addEventListener("blur", save);
+
+    wrapper.append(text, input);
+    return wrapper;
+  }
+
+  private createSettingColorInputOption(options: {
+    initialValue: string;
+    label: string;
+    onChange: (value: string) => void;
+  }): HTMLElement {
+    const wrapper = document.createElement("label");
+    wrapper.className = "image-quickedit-setting-field";
+
+    const text = document.createElement("span");
+    text.textContent = options.label;
+
+    const input = document.createElement("input");
+    input.className = "b3-text-field";
+    input.type = "color";
+    input.value = this.normalizeColorInputValue(options.initialValue);
+    input.addEventListener("change", () => {
+      const normalizedValue = this.normalizeColorInputValue(input.value);
+      input.value = normalizedValue;
+      options.onChange(normalizedValue);
+    });
+
+    wrapper.append(text, input);
     return wrapper;
   }
 
@@ -430,6 +526,15 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
 
   private reportProgress(message: string): void {
     showMessage(message, 3000, "info", PROGRESS_MESSAGE_ID);
+  }
+
+  private persistSuperBlockMergeOptions(nextOptions: Partial<SuperBlockMergeOptions>): void {
+    this.persistSettings({
+      superBlockMergeOptions: {
+        ...this.settings.superBlockMergeOptions,
+        ...nextOptions,
+      },
+    });
   }
 
   private persistSettings(nextSettings: Partial<PluginSettings>): void {
@@ -613,7 +718,7 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
       }
 
       this.reportProgress("图片合并：正在生成拼接结果");
-      const merged = await mergeSuperBlockImages(targets);
+      const merged = await mergeSuperBlockImages(targets, this.settings.superBlockMergeOptions);
 
       this.reportProgress("图片合并：正在上传处理结果");
       const assetPath = await uploadAsset(new File([merged.output.blob], merged.fileName, {
@@ -679,6 +784,17 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
 
   private async delay(timeout: number): Promise<void> {
     await new Promise(resolve => setTimeout(resolve, timeout));
+  }
+
+  private normalizeNonNegativeIntegerInput(value: string): number {
+    const parsed = Number.parseInt(value, 10);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+  }
+
+  private normalizeColorInputValue(value: string): string {
+    return /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/iu.test(value)
+      ? value.toLowerCase()
+      : DEFAULT_SUPER_BLOCK_MERGE_OPTIONS.borderColor;
   }
 
   private getStableImageSrc(imageElement: HTMLImageElement): string {
