@@ -30,6 +30,7 @@ export interface PluginSettings {
   documentInsertMenuCommands: DocumentBatchCommandToggleMap;
   documentReplaceMenuCommands: DocumentBatchCommandToggleMap;
   localEditorPath: string;
+  showAddImageBorderMenuItem: boolean;
   showSuperBlockMergeMenuItem: boolean;
   showImageInfoNotification: boolean;
   superBlockMergeOptions: SuperBlockMergeOptions;
@@ -69,6 +70,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   documentInsertMenuCommands: { ...DEFAULT_DOCUMENT_BATCH_COMMAND_TOGGLES },
   documentReplaceMenuCommands: { ...DEFAULT_DOCUMENT_BATCH_COMMAND_TOGGLES },
   localEditorPath: "",
+  showAddImageBorderMenuItem: false,
   showSuperBlockMergeMenuItem: true,
   showImageInfoNotification: false,
   superBlockMergeOptions: { ...DEFAULT_SUPER_BLOCK_MERGE_OPTIONS },
@@ -94,6 +96,8 @@ export function mergeSettings(settings?: LegacyPluginSettings | null): PluginSet
       ...settings?.documentReplaceMenuCommands,
     },
     localEditorPath: settings?.localEditorPath ?? DEFAULT_SETTINGS.localEditorPath,
+    showAddImageBorderMenuItem:
+      settings?.showAddImageBorderMenuItem ?? DEFAULT_SETTINGS.showAddImageBorderMenuItem,
     showSuperBlockMergeMenuItem:
       settings?.showSuperBlockMergeMenuItem ?? DEFAULT_SETTINGS.showSuperBlockMergeMenuItem,
     showImageInfoNotification: settings?.showImageInfoNotification ?? DEFAULT_SETTINGS.showImageInfoNotification,

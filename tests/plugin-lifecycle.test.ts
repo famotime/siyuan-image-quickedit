@@ -21,7 +21,7 @@ test("uninstall removes persisted settings data", async () => {
   expect(removeData).toHaveBeenCalledWith("settings.json");
 });
 
-test("click-blockicon nests image merge under the image quick edit submenu for super block with multiple images", async () => {
+test("click-blockicon keeps add-border hidden by default and still nests image merge for super block with multiple images", async () => {
   const addItem = vi.fn();
   const { default: SiyuanImageQuickEditPlugin } = await import("../src/index.ts");
   const plugin = new SiyuanImageQuickEditPlugin();
@@ -41,12 +41,47 @@ test("click-blockicon nests image merge under the image quick edit submenu for s
   expect(addItem).toHaveBeenCalledTimes(1);
   expect(addItem).toHaveBeenCalledWith(expect.objectContaining({
     label: "图片快剪",
-    submenu: expect.arrayContaining([
+    submenu: expect.not.arrayContaining([
       expect.objectContaining({
         label: "添加图像边框",
       }),
+    ]),
+  }));
+  expect(addItem).toHaveBeenCalledWith(expect.objectContaining({
+    label: "图片快剪",
+    submenu: expect.arrayContaining([
       expect.objectContaining({
         label: "图片合并",
+      }),
+    ]),
+  }));
+});
+
+test("click-blockicon shows add-border after the image menu setting is enabled", async () => {
+  const addItem = vi.fn();
+  const { default: SiyuanImageQuickEditPlugin } = await import("../src/index.ts");
+  const plugin = new SiyuanImageQuickEditPlugin();
+  (plugin as any).settings = mergeSettings({
+    showAddImageBorderMenuItem: true,
+  });
+  const blockElement = document.createElement("div");
+  blockElement.dataset.nodeId = "super-1";
+  blockElement.dataset.type = "NodeSuperBlock";
+  blockElement.innerHTML = `
+    <div data-node-id="img-1"><img src="/assets/1.png"></div>
+    <div data-node-id="img-2"><img src="/assets/2.png"></div>
+  `;
+
+  (plugin as any).decorateBlockIconMenu({
+    blockElements: [blockElement],
+    menu: { addItem },
+  });
+
+  expect(addItem).toHaveBeenCalledWith(expect.objectContaining({
+    label: "图片快剪",
+    submenu: expect.arrayContaining([
+      expect.objectContaining({
+        label: "添加图像边框",
       }),
     ]),
   }));
@@ -107,7 +142,7 @@ test("click-blockicon does not add image merge menu item when super block has fe
   }));
 });
 
-test("createImageMenuToggleGroup includes the super block merge toggle and persists updates", async () => {
+test("createImageMenuToggleGroup includes add-border and super block merge toggles and persists updates", async () => {
   const saveData = vi.fn().mockResolvedValue(undefined);
   const { default: SiyuanImageQuickEditPlugin } = await import("../src/index.ts");
   const plugin = new SiyuanImageQuickEditPlugin();
@@ -116,18 +151,26 @@ test("createImageMenuToggleGroup includes the super block merge toggle and persi
 
   const wrapper = (plugin as any).createImageMenuToggleGroup();
   const labels = Array.from(wrapper.querySelectorAll("label"));
+  const addBorderOption = labels.find(label => label.textContent?.includes("添加图像边框"));
   const mergeOption = labels.find(label => label.textContent?.includes("超级块图片合并"));
 
+  expect(addBorderOption).toBeTruthy();
   expect(mergeOption).toBeTruthy();
 
+  const addBorderCheckbox = addBorderOption?.querySelector("input") as HTMLInputElement;
   const checkbox = mergeOption?.querySelector("input") as HTMLInputElement;
+  expect(addBorderCheckbox.checked).toBe(false);
   expect(checkbox.checked).toBe(true);
 
+  addBorderCheckbox.checked = true;
+  addBorderCheckbox.dispatchEvent(new Event("change"));
   checkbox.checked = false;
   checkbox.dispatchEvent(new Event("change"));
 
+  expect((plugin as any).settings.showAddImageBorderMenuItem).toBe(true);
   expect((plugin as any).settings.showSuperBlockMergeMenuItem).toBe(false);
-  expect(saveData).toHaveBeenCalledWith("settings.json", expect.objectContaining({
+  expect(saveData).toHaveBeenLastCalledWith("settings.json", expect.objectContaining({
+    showAddImageBorderMenuItem: true,
     showSuperBlockMergeMenuItem: false,
   }));
 });

@@ -219,6 +219,15 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
   private createImageMenuToggleGroup(): HTMLElement {
     const wrapper = this.createCommandToggleGroup("imageMenuCommands");
     wrapper.append(this.createSettingCheckboxOption({
+      checked: this.settings.showAddImageBorderMenuItem,
+      label: "添加图像边框",
+      onChange: (checked) => {
+        this.persistSettings({
+          showAddImageBorderMenuItem: checked,
+        });
+      },
+    }));
+    wrapper.append(this.createSettingCheckboxOption({
       checked: this.settings.showSuperBlockMergeMenuItem,
       label: "超级块图片合并",
       onChange: (checked) => {
@@ -435,9 +444,11 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
     const submenu = buildImageQuickEditSubmenuItems({
       commandIds: enabledCommands,
       imageInfoLabel: this.imageInfoCache.get(cacheKey) || "读取图片信息中...",
-      onAddImageBorder: () => {
-        void this.runExclusive(async () => this.addBorderToImageTarget(target));
-      },
+      onAddImageBorder: this.settings.showAddImageBorderMenuItem
+        ? () => {
+            void this.runExclusive(async () => this.addBorderToImageTarget(target));
+          }
+        : undefined,
       onCommandClick: (commandId) => {
         void this.runExclusive(async () => this.processSingleTarget(target, commandId));
       },
