@@ -8,16 +8,22 @@ import {
 } from "siyuan";
 
 import "@/index.scss";
-import { COMMAND_DEFINITIONS } from "@/core/command-meta.ts";
+import {
+  COMMAND_DEFINITIONS,
+  DOCUMENT_BATCH_COMMAND_DEFINITIONS,
+} from "@/core/command-meta.ts";
 import {
   COMMAND_ORDER,
+  DOCUMENT_BATCH_COMMAND_ORDER,
   DEFAULT_SETTINGS,
   DEFAULT_SUPER_BLOCK_MERGE_OPTIONS,
   type CommandMenuSettingKey,
   type CommandId,
+  type DocumentBatchCommandId,
   type PluginSettings,
   type SuperBlockMergeOptions,
   getEnabledCommandIds,
+  getEnabledDocumentBatchCommandIds,
   mergeSettings,
 } from "@/core/command-settings.ts";
 import { buildBatchResultMessage } from "@/core/formatters.ts";
@@ -45,6 +51,7 @@ import {
   uploadAsset,
 } from "@/services/kernel.ts";
 import {
+  addBorderToImageTarget as prepareBorderedImage,
   buildReplacedBlockMarkdown,
   buildImageInfoForTarget,
   buildProcessedResultMarkdown,
@@ -161,14 +168,29 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
     const wrapper = document.createElement("div");
     wrapper.className = "image-quickedit-setting-group";
 
-    for (const commandId of COMMAND_ORDER) {
+    const isImageMenu = settingKey === "imageMenuCommands";
+    const commandIds = isImageMenu ? COMMAND_ORDER : DOCUMENT_BATCH_COMMAND_ORDER;
+
+    for (const commandId of commandIds) {
       const label = document.createElement("label");
       label.className = "image-quickedit-setting-option";
 
       const checkbox = document.createElement("input");
-      checkbox.checked = this.settings[settingKey][commandId];
+      checkbox.checked = isImageMenu
+        ? this.settings.imageMenuCommands[commandId as CommandId]
+        : this.settings[settingKey][commandId as DocumentBatchCommandId];
       checkbox.type = "checkbox";
       checkbox.addEventListener("change", () => {
+        if (isImageMenu) {
+          this.persistSettings({
+            imageMenuCommands: {
+              ...this.settings.imageMenuCommands,
+              [commandId]: checkbox.checked,
+            },
+          });
+          return;
+        }
+
         this.persistSettings({
           [settingKey]: {
             ...this.settings[settingKey],
@@ -178,11 +200,14 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
       });
 
       const text = document.createElement("span");
-      text.textContent = settingKey === "documentInsertMenuCommands"
-        ? COMMAND_DEFINITIONS[commandId].insertBatchLabel
-        : settingKey === "documentReplaceMenuCommands"
-          ? COMMAND_DEFINITIONS[commandId].replaceBatchLabel
-          : COMMAND_DEFINITIONS[commandId].label;
+      if (isImageMenu) {
+        text.textContent = COMMAND_DEFINITIONS[commandId as CommandId].label;
+      }
+      else {
+        text.textContent = settingKey === "documentInsertMenuCommands"
+          ? DOCUMENT_BATCH_COMMAND_DEFINITIONS[commandId as DocumentBatchCommandId].insertBatchLabel
+          : DOCUMENT_BATCH_COMMAND_DEFINITIONS[commandId as DocumentBatchCommandId].replaceBatchLabel;
+      }
 
       label.append(checkbox, text);
       wrapper.append(label);
@@ -406,14 +431,13 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
     }
 
     const enabledCommands = getEnabledCommandIds(this.settings.imageMenuCommands);
-    if (!enabledCommands.length && !options?.onMergeSuperBlockImages) {
-      return;
-    }
-
     const cacheKey = `${target.blockId}|${target.src}`;
     const submenu = buildImageQuickEditSubmenuItems({
       commandIds: enabledCommands,
       imageInfoLabel: this.imageInfoCache.get(cacheKey) || "读取图片信息中...",
+      onAddImageBorder: () => {
+        void this.runExclusive(async () => this.addBorderToImageTarget(target));
+      },
       onCommandClick: (commandId) => {
         void this.runExclusive(async () => this.processSingleTarget(target, commandId));
       },
@@ -466,8 +490,8 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
   }
 
   private decorateDocumentMenu(protyle: IProtyle, menu: IEventBusMap["click-editortitleicon"]["menu"]): void {
-    const enabledInsertCommands = getEnabledCommandIds(this.settings.documentInsertMenuCommands);
-    const enabledReplaceCommands = getEnabledCommandIds(this.settings.documentReplaceMenuCommands);
+    const enabledInsertCommands = getEnabledDocumentBatchCommandIds(this.settings.documentInsertMenuCommands);
+    const enabledReplaceCommands = getEnabledDocumentBatchCommandIds(this.settings.documentReplaceMenuCommands);
     if (!enabledInsertCommands.length && !enabledReplaceCommands.length) {
       return;
     }
@@ -485,8 +509,8 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
         replaceCommandIds: enabledReplaceCommands,
         onCommandClick: (commandId, mode) => {
           const commandLabel = mode === "replace"
-            ? COMMAND_DEFINITIONS[commandId].replaceBatchLabel
-            : COMMAND_DEFINITIONS[commandId].insertBatchLabel;
+            ? DOCUMENT_BATCH_COMMAND_DEFINITIONS[commandId].replaceBatchLabel
+            : DOCUMENT_BATCH_COMMAND_DEFINITIONS[commandId].insertBatchLabel;
           const detail = mode === "replace"
             ? "原图将被直接替换，正文文本保持不变。"
             : "原图不会删除，处理结果会插入到对应图片块后方。";
@@ -555,6 +579,32 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
     }
   }
 
+  private async addBorderToImageTarget(target: ImageTarget): Promise<void> {
+    if (this.settings.superBlockMergeOptions.borderWidthPx <= 0) {
+      showMessage("请先在“超级块图片合并”设置中填写大于 0 的图片边框宽度。", 6000, "error");
+      return;
+    }
+
+    try {
+      this.reportProgress("添加图像边框：正在读取图片");
+      const prepared = await prepareBorderedImage(target, this.settings.superBlockMergeOptions);
+
+      this.reportProgress("添加图像边框：正在上传处理结果");
+      const assetPath = await uploadAsset(new File([prepared.output.blob], prepared.fileName, {
+        type: "image/webp",
+      }));
+
+      this.reportProgress("添加图像边框：正在插入结果块");
+      const markdown = buildProcessedResultMarkdown(prepared, assetPath);
+      await insertMarkdownAfterBlock(target.blockId, markdown);
+
+      showMessage("添加图像边框完成，结果已插入到当前图片下方。", 6000, "info");
+    }
+    catch (error) {
+      showMessage(error instanceof Error ? error.message : String(error), 6000, "error");
+    }
+  }
+
   private async editImageWithLocalEditor(target: ImageTarget): Promise<void> {
     const editorPath = this.settings.localEditorPath.trim();
     if (!editorPath) {
@@ -611,7 +661,7 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
 
   private async processDocumentTargets(
     targets: ImageTarget[],
-    commandId: CommandId,
+    commandId: DocumentBatchCommandId,
     mode: DocumentBatchMode,
   ): Promise<void> {
     const indexedTargets = targets.map((target, index) => ({
@@ -620,8 +670,8 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
     }));
     const targetMap = new Map(indexedTargets.map(target => [target.executionId, target]));
     const batchCommandLabel = mode === "replace"
-      ? COMMAND_DEFINITIONS[commandId].replaceBatchLabel
-      : COMMAND_DEFINITIONS[commandId].insertBatchLabel;
+      ? DOCUMENT_BATCH_COMMAND_DEFINITIONS[commandId].replaceBatchLabel
+      : DOCUMENT_BATCH_COMMAND_DEFINITIONS[commandId].insertBatchLabel;
 
     const result = await runTargetsSequentially({
       commandId,
@@ -630,6 +680,10 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
         const target = targetMap.get(id);
         if (!target) {
           throw new Error(`找不到图片任务：${id}`);
+        }
+
+        if (commandId === "add-border") {
+          return this.processBorderTarget(target, mode);
         }
 
         return this.processTarget(target, commandId, mode);
@@ -674,14 +728,50 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
       message => this.reportProgress(`${COMMAND_DEFINITIONS[commandId].label}：${message}`),
     );
 
-    this.reportProgress(`${COMMAND_DEFINITIONS[commandId].label}：正在上传处理结果`);
+    return this.finalizeGeneratedTarget(target, prepared, mode, COMMAND_DEFINITIONS[commandId].label);
+  }
+
+  private async processBorderTarget(
+    target: ImageTarget,
+    mode: DocumentBatchMode,
+  ): Promise<{
+    originalBytes: number;
+    outputBytes: number;
+    summary: string;
+  }> {
+    this.reportProgress("添加图像边框：正在读取图片");
+    const prepared = await prepareBorderedImage(target, this.settings.superBlockMergeOptions);
+    return this.finalizeGeneratedTarget(target, prepared, mode, prepared.commandLabel);
+  }
+
+  private async finalizeGeneratedTarget(
+    target: ImageTarget,
+    prepared: {
+      commandLabel: string;
+      fileName: string;
+      original: {
+        bytes: number;
+      };
+      output: {
+        blob: Blob;
+        bytes: number;
+      };
+    },
+    mode: DocumentBatchMode,
+    progressLabel: string,
+  ): Promise<{
+    originalBytes: number;
+    outputBytes: number;
+    summary: string;
+  }> {
+    this.reportProgress(`${progressLabel}：正在上传处理结果`);
     const file = new File([prepared.output.blob], prepared.fileName, {
       type: "image/webp",
     });
     const assetPath = await uploadAsset(file);
 
     if (mode === "replace") {
-      this.reportProgress(`${COMMAND_DEFINITIONS[commandId].label}：正在替换原图`);
+      this.reportProgress(`${progressLabel}：正在替换原图`);
       const blockMarkdown = await getBlockMarkdown(target.blockId);
       const updatedMarkdown = buildReplacedBlockMarkdown(blockMarkdown, target, assetPath);
       await updateMarkdownBlock(target.blockId, updatedMarkdown);
@@ -689,11 +779,11 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
       return {
         originalBytes: prepared.original.bytes,
         outputBytes: prepared.output.bytes,
-        summary: `${COMMAND_DEFINITIONS[commandId].label}已直接替换原图`,
+        summary: `${prepared.commandLabel}已直接替换原图`,
       };
     }
 
-    this.reportProgress(`${COMMAND_DEFINITIONS[commandId].label}：正在插入结果块`);
+    this.reportProgress(`${progressLabel}：正在插入结果块`);
     const markdown = buildProcessedResultMarkdown(prepared, assetPath);
     await insertMarkdownAfterBlock(target.blockId, markdown);
 

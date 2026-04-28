@@ -2,6 +2,7 @@
 import { afterEach, expect, test, vi } from "vitest";
 
 import {
+  addBorderToBitmap,
   collectSuperBlockImageTargets,
   mergeBitmapsHorizontallyTopAligned,
 } from "../src/services/image-workflow.ts";
@@ -31,8 +32,9 @@ test("mergeBitmapsHorizontallyTopAligned uses summed width and max height", asyn
   const firstBitmap = { height: 40, width: 120 } as ImageBitmap;
   const secondBitmap = { height: 60, width: 80 } as ImageBitmap;
   const drawImage = vi.fn();
+  const fillRect = vi.fn();
   const toBlob = vi.fn((callback: BlobCallback) => callback(new Blob(["merged"], { type: "image/webp" })));
-  const getContext = vi.fn(() => ({ drawImage }));
+  const getContext = vi.fn(() => ({ drawImage, fillRect, fillStyle: "" }));
   const originalCreateElement = document.createElement.bind(document);
 
   vi.spyOn(document, "createElement").mockImplementation(((tagName: string) => {
@@ -50,10 +52,12 @@ test("mergeBitmapsHorizontallyTopAligned uses summed width and max height", asyn
 
   const result = await mergeBitmapsHorizontallyTopAligned([firstBitmap, secondBitmap]);
 
-  expect(result.width).toBe(200);
-  expect(result.height).toBe(60);
-  expect(drawImage).toHaveBeenNthCalledWith(1, firstBitmap, 0, 0, 120, 40);
-  expect(drawImage).toHaveBeenNthCalledWith(2, secondBitmap, 120, 0, 80, 60);
+  expect(result.width).toBe(208);
+  expect(result.height).toBe(64);
+  expect(fillRect).toHaveBeenNthCalledWith(1, 0, 0, 124, 44);
+  expect(fillRect).toHaveBeenNthCalledWith(2, 124, 0, 84, 64);
+  expect(drawImage).toHaveBeenNthCalledWith(1, firstBitmap, 2, 2, 120, 40);
+  expect(drawImage).toHaveBeenNthCalledWith(2, secondBitmap, 126, 2, 80, 60);
   expect(result.blob.type).toBe("image/webp");
 });
 
@@ -97,5 +101,45 @@ test("mergeBitmapsHorizontallyTopAligned applies spacing and per-image borders",
   expect(fillRect).toHaveBeenNthCalledWith(2, 130, 0, 84, 64);
   expect(drawImage).toHaveBeenNthCalledWith(1, firstBitmap, 2, 2, 120, 40);
   expect(drawImage).toHaveBeenNthCalledWith(2, secondBitmap, 132, 2, 80, 60);
+  expect(result.blob.type).toBe("image/webp");
+});
+
+test("addBorderToBitmap expands image size and uses the configured border color", async () => {
+  const bitmap = { height: 60, width: 80 } as ImageBitmap;
+  const drawImage = vi.fn();
+  const fillRect = vi.fn();
+  const toBlob = vi.fn((callback: BlobCallback) => callback(new Blob(["bordered"], { type: "image/webp" })));
+  const context = {
+    drawImage,
+    fillRect,
+    fillStyle: "",
+  };
+  const getContext = vi.fn(() => context);
+  const originalCreateElement = document.createElement.bind(document);
+
+  vi.spyOn(document, "createElement").mockImplementation(((tagName: string) => {
+    if (tagName === "canvas") {
+      return {
+        height: 0,
+        width: 0,
+        getContext,
+        toBlob,
+      } as unknown as HTMLCanvasElement;
+    }
+
+    return originalCreateElement(tagName);
+  }) as typeof document.createElement);
+
+  const result = await addBorderToBitmap(bitmap, {
+    borderColor: "#00ff88",
+    borderWidthPx: 3,
+    gapPx: 12,
+  });
+
+  expect(result.width).toBe(86);
+  expect(result.height).toBe(66);
+  expect(context.fillStyle).toBe("#00ff88");
+  expect(fillRect).toHaveBeenCalledWith(0, 0, 86, 66);
+  expect(drawImage).toHaveBeenCalledWith(bitmap, 3, 3, 80, 60);
   expect(result.blob.type).toBe("image/webp");
 });

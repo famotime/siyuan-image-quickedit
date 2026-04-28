@@ -1,7 +1,13 @@
 import { expect, test } from "vitest";
 
-import { COMMAND_DEFINITIONS } from "../src/core/command-meta.ts";
-import { getEnabledCommandIds } from "../src/core/command-settings.ts";
+import {
+  COMMAND_DEFINITIONS,
+  DOCUMENT_BATCH_COMMAND_DEFINITIONS,
+} from "../src/core/command-meta.ts";
+import {
+  getEnabledCommandIds,
+  getEnabledDocumentBatchCommandIds,
+} from "../src/core/command-settings.ts";
 
 test("single-image menu command labels are available synchronously", () => {
   const labels = getEnabledCommandIds({
@@ -34,4 +40,26 @@ test("document batch command labels distinguish insert and replace modes", () =>
     insertBatchLabel: "全部压缩到 30%（新增）",
     replaceBatchLabel: "全部压缩到 30%（替换）",
   });
+  expect(DOCUMENT_BATCH_COMMAND_DEFINITIONS["add-border"]).toMatchObject({
+    insertBatchLabel: "全部图片添加边框（新增）",
+    replaceBatchLabel: "图片添加边框（替换）",
+  });
+});
+
+test("document batch enabled ids include add-border only after opt-in", () => {
+  const enabled = getEnabledDocumentBatchCommandIds({
+    "add-border": true,
+    "compress-10": true,
+    "compress-30": false,
+    "compress-50": false,
+    "compress-75": true,
+    "convert-webp": true,
+  });
+
+  expect(enabled).toEqual([
+    "convert-webp",
+    "compress-75",
+    "compress-10",
+    "add-border",
+  ]);
 });

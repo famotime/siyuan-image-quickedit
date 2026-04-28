@@ -11,13 +11,14 @@ import {
 test("buildImageQuickEditSubmenuItems prepends readonly image info before commands", () => {
   const items = buildImageQuickEditSubmenuItems({
     commandIds: ["convert-webp", "compress-75", "compress-50"],
+    onAddImageBorder: () => undefined,
     imageInfoLabel: "230.13 KB，1024×572×24 (1.79)",
     onMergeSuperBlockImages: () => undefined,
     onOpenLocalEditor: () => undefined,
     onCommandClick: () => undefined,
   });
 
-  expect(items).toHaveLength(8);
+  expect(items).toHaveLength(9);
   expect(items[0]).toMatchObject({
     label: "230.13 KB，1024×572×24 (1.79)",
     type: "readonly",
@@ -29,18 +30,21 @@ test("buildImageQuickEditSubmenuItems prepends readonly image info before comman
     label: "使用本地编辑器编辑",
   });
   expect(items[3]).toMatchObject({
-    label: "图片合并",
+    label: "添加图像边框",
   });
   expect(items[4]).toMatchObject({
-    type: "separator",
+    label: "图片合并",
   });
   expect(items[5]).toMatchObject({
-    label: "转为 WebP 格式",
+    type: "separator",
   });
   expect(items[6]).toMatchObject({
-    label: "压缩到 75%",
+    label: "转为 WebP 格式",
   });
   expect(items[7]).toMatchObject({
+    label: "压缩到 75%",
+  });
+  expect(items[8]).toMatchObject({
     label: "压缩到 50%",
   });
 });
@@ -65,9 +69,9 @@ test("syncReadonlyMenuItemLabelElement preserves line breaks for multiline reado
 
 test("buildDocumentBatchSubmenuItems creates a flat document menu for insert and replace actions", () => {
   const items = buildDocumentBatchSubmenuItems({
-    insertCommandIds: ["convert-webp", "compress-75", "compress-50"],
+    insertCommandIds: ["convert-webp", "compress-75", "add-border"],
     onCommandClick: () => undefined,
-    replaceCommandIds: ["convert-webp", "compress-75", "compress-50"],
+    replaceCommandIds: ["convert-webp", "compress-75", "add-border"],
   });
 
   expect(items).toHaveLength(7);
@@ -78,7 +82,7 @@ test("buildDocumentBatchSubmenuItems creates a flat document menu for insert and
     label: "全部压缩到 75%（新增）",
   });
   expect(items[2]).toMatchObject({
-    label: "全部压缩到 50%（新增）",
+    label: "全部图片添加边框（新增）",
   });
   expect(items[3]).toMatchObject({
     type: "separator",
@@ -90,7 +94,7 @@ test("buildDocumentBatchSubmenuItems creates a flat document menu for insert and
     label: "全部压缩到 75%（替换）",
   });
   expect(items[6]).toMatchObject({
-    label: "全部压缩到 50%（替换）",
+    label: "图片添加边框（替换）",
   });
 });
 

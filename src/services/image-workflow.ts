@@ -32,29 +32,28 @@ export interface ImageMetadata {
   width: number;
 }
 
-export interface PreparedImageResult {
-  commandId: CommandId;
+export interface ProcessedImageOutput {
+  blob: Blob;
+  bytes: number;
+  format: string;
+  height: number;
+  width: number;
+}
+
+export interface GeneratedImageResult {
   commandLabel: string;
   fileName: string;
   original: ImageMetadata;
-  output: {
-    blob: Blob;
-    bytes: number;
-    format: string;
-    height: number;
-    width: number;
-  };
+  output: ProcessedImageOutput;
+}
+
+export interface PreparedImageResult extends GeneratedImageResult {
+  commandId: CommandId;
 }
 
 export interface SuperBlockMergedImageResult {
   fileName: string;
-  output: {
-    blob: Blob;
-    bytes: number;
-    format: string;
-    height: number;
-    width: number;
-  };
+  output: ProcessedImageOutput;
 }
 
 interface InspectedImageTarget {
@@ -74,6 +73,7 @@ const MIN_COMPRESSION_QUALITY = 0.05;
 const MAX_COMPRESSION_QUALITY = 0.98;
 const QUALITY_SEARCH_ITERATIONS = 8;
 const QUALITY_REFINEMENT_FACTORS = [0.25, 0.5, 0.75];
+const ADD_BORDER_COMMAND_LABEL = "添加图像边框";
 
 function clampScale(scale: number): number {
   return Math.min(1, Math.max(0.1, scale || 1));
@@ -599,6 +599,13 @@ export async function mergeBitmapsHorizontallyTopAligned(
   };
 }
 
+export async function addBorderToBitmap(
+  bitmap: ImageBitmap,
+  options: SuperBlockMergeOptions = DEFAULT_SUPER_BLOCK_MERGE_OPTIONS,
+): Promise<{ blob: Blob; height: number; width: number }> {
+  return mergeBitmapsHorizontallyTopAligned([bitmap], options);
+}
+
 export async function mergeSuperBlockImages(
   targets: ImageTarget[],
   options: SuperBlockMergeOptions = DEFAULT_SUPER_BLOCK_MERGE_OPTIONS,
@@ -632,6 +639,34 @@ export async function mergeSuperBlockImages(
     for (const bitmap of bitmaps) {
       bitmap.close();
     }
+  }
+}
+
+export async function addBorderToImageTarget(
+  target: ImageTarget,
+  options: SuperBlockMergeOptions = DEFAULT_SUPER_BLOCK_MERGE_OPTIONS,
+): Promise<GeneratedImageResult> {
+  const inspected = await inspectImageTarget(target);
+
+  try {
+    const output = await addBorderToBitmap(inspected.bitmap, options);
+    const sourceBaseName = inspected.fileName.replace(/\.[^.]+$/, "") || inspected.fileName;
+
+    return {
+      commandLabel: ADD_BORDER_COMMAND_LABEL,
+      fileName: `${sourceBaseName}.quickedit-add-border-${Date.now()}.webp`,
+      original: inspected.original,
+      output: {
+        blob: output.blob,
+        bytes: output.blob.size,
+        format: "webp",
+        height: output.height,
+        width: output.width,
+      },
+    };
+  }
+  finally {
+    inspected.bitmap.close();
   }
 }
 
@@ -682,7 +717,7 @@ export async function prepareProcessedImage(
   }
 }
 
-export function buildProcessedResultMarkdown(prepared: PreparedImageResult, assetPath: string): string {
+export function buildProcessedResultMarkdown(prepared: GeneratedImageResult, assetPath: string): string {
   return buildResultMarkdown({
     commandLabel: prepared.commandLabel,
     original: prepared.original,

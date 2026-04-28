@@ -10,6 +10,15 @@ export type CommandId = (typeof COMMAND_ORDER)[number];
 
 export type CommandToggleMap = Record<CommandId, boolean>;
 
+export const DOCUMENT_BATCH_COMMAND_ORDER = [
+  ...COMMAND_ORDER,
+  "add-border",
+] as const;
+
+export type DocumentBatchCommandId = (typeof DOCUMENT_BATCH_COMMAND_ORDER)[number];
+
+export type DocumentBatchCommandToggleMap = Record<DocumentBatchCommandId, boolean>;
+
 export interface SuperBlockMergeOptions {
   gapPx: number;
   borderWidthPx: number;
@@ -18,8 +27,8 @@ export interface SuperBlockMergeOptions {
 
 export interface PluginSettings {
   imageMenuCommands: CommandToggleMap;
-  documentInsertMenuCommands: CommandToggleMap;
-  documentReplaceMenuCommands: CommandToggleMap;
+  documentInsertMenuCommands: DocumentBatchCommandToggleMap;
+  documentReplaceMenuCommands: DocumentBatchCommandToggleMap;
   localEditorPath: string;
   showSuperBlockMergeMenuItem: boolean;
   showImageInfoNotification: boolean;
@@ -44,16 +53,21 @@ export const DEFAULT_COMMAND_TOGGLES: CommandToggleMap = {
   "compress-10": true,
 };
 
+export const DEFAULT_DOCUMENT_BATCH_COMMAND_TOGGLES: DocumentBatchCommandToggleMap = {
+  ...DEFAULT_COMMAND_TOGGLES,
+  "add-border": false,
+};
+
 export const DEFAULT_SUPER_BLOCK_MERGE_OPTIONS: SuperBlockMergeOptions = {
   gapPx: 0,
-  borderWidthPx: 0,
-  borderColor: "#000000",
+  borderWidthPx: 2,
+  borderColor: "#808080",
 };
 
 export const DEFAULT_SETTINGS: PluginSettings = {
   imageMenuCommands: { ...DEFAULT_COMMAND_TOGGLES },
-  documentInsertMenuCommands: { ...DEFAULT_COMMAND_TOGGLES },
-  documentReplaceMenuCommands: { ...DEFAULT_COMMAND_TOGGLES },
+  documentInsertMenuCommands: { ...DEFAULT_DOCUMENT_BATCH_COMMAND_TOGGLES },
+  documentReplaceMenuCommands: { ...DEFAULT_DOCUMENT_BATCH_COMMAND_TOGGLES },
   localEditorPath: "",
   showSuperBlockMergeMenuItem: true,
   showImageInfoNotification: false,
@@ -99,6 +113,12 @@ export function mergeSettings(settings?: LegacyPluginSettings | null): PluginSet
 
 export function getEnabledCommandIds(toggleMap: Partial<CommandToggleMap>): CommandId[] {
   return COMMAND_ORDER.filter(commandId => toggleMap[commandId]);
+}
+
+export function getEnabledDocumentBatchCommandIds(
+  toggleMap: Partial<DocumentBatchCommandToggleMap>,
+): DocumentBatchCommandId[] {
+  return DOCUMENT_BATCH_COMMAND_ORDER.filter(commandId => toggleMap[commandId]);
 }
 
 function normalizeNonNegativeInteger(value: number | string | undefined, fallback: number): number {

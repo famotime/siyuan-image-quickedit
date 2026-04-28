@@ -3,6 +3,7 @@ import { expect, test } from "vitest";
 import {
   DEFAULT_SETTINGS,
   getEnabledCommandIds,
+  getEnabledDocumentBatchCommandIds,
   mergeSettings,
 } from "../src/core/command-settings.ts";
 
@@ -32,6 +33,7 @@ test("mergeSettings fills missing menu toggles with defaults", () => {
     "compress-10": false,
   });
   expect(settings.documentInsertMenuCommands).toEqual({
+    "add-border": false,
     "convert-webp": true,
     "compress-75": false,
     "compress-50": true,
@@ -61,6 +63,7 @@ test("mergeSettings migrates legacy document menu toggles to both document menu 
   });
 
   expect(settings.documentInsertMenuCommands).toEqual({
+    "add-border": false,
     "convert-webp": false,
     "compress-75": true,
     "compress-50": true,
@@ -68,6 +71,7 @@ test("mergeSettings migrates legacy document menu toggles to both document menu 
     "compress-10": true,
   });
   expect(settings.documentReplaceMenuCommands).toEqual({
+    "add-border": false,
     "convert-webp": false,
     "compress-75": true,
     "compress-50": true,
@@ -88,8 +92,8 @@ test("mergeSettings fills missing super block merge options with defaults", () =
   });
 
   expect(settings.superBlockMergeOptions).toEqual({
-    borderColor: "#000000",
-    borderWidthPx: 0,
+    borderColor: "#808080",
+    borderWidthPx: 2,
     gapPx: 8,
   });
 });
@@ -107,6 +111,16 @@ test("getEnabledCommandIds keeps PRD command order and filters disabled items", 
     "convert-webp",
     "compress-75",
     "compress-30",
+    "compress-10",
+  ]);
+});
+
+test("getEnabledDocumentBatchCommandIds keeps add-border disabled by default", () => {
+  const enabled = getEnabledDocumentBatchCommandIds(DEFAULT_SETTINGS.documentInsertMenuCommands);
+
+  expect(enabled).toEqual([
+    "convert-webp",
+    "compress-50",
     "compress-10",
   ]);
 });
