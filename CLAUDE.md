@@ -4,95 +4,77 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a SiYuan note-taking plugin that provides quick image conversion and compression actions. Users can right-click images in documents to convert to WebP format or compress to target file sizes (75%, 50%, 30%, 10%). The plugin also supports batch operations on all images in a document.
-
-## Development Commands
-
-```bash
-# Development mode with hot reload
-npm run dev
-
-# Build for production (outputs to ./dist and creates package.zip)
-npm run build
-
-# Run tests
-npm test
-
-# Lint code
-npx eslint .
-
-# Release commands
-npm run release              # Interactive release
-npm run release:patch        # Patch version bump
-npm run release:minor        # Minor version bump
-npm run release:major        # Major version bump
-```
-
-## Development Setup
-
-1. Copy `.env.example` to `.env` and set `VITE_SIYUAN_WORKSPACE_PATH` to your SiYuan workspace path
-2. Run `npm run dev` - the plugin will build to `{workspace}/data/plugins/siyuan-image-quickedit`
-3. Enable the plugin in SiYuan's settings
+SiYuan note-taking plugin (思源图片快剪) for quick image viewing, conversion, compression, and batch processing. Users right-click images to convert to WebP or compress to target sizes (75%, 50%, 30%, 10%). Supports batch operations on all images in a document, super block image merging, image border addition, and opening images in a local editor.
 
 ## Architecture
 
+### Path Alias
+
+`@/` maps to `src/` (configured in `vite.config.ts` and inherited by Vitest).
+
 ### Plugin Entry Point
-- `src/index.ts` - Main plugin class extending `Plugin` from `siyuan` package
-- Listens to two key events:
-  - `open-menu-image` - Decorates right-click menu on images
-  - `click-editortitleicon` - Decorates document title menu for batch operations
 
-### Core Modules
+`src/index.ts` — Single plugin class extending `Plugin` from `siyuan`. Three event hooks:
+- `open-menu-image` — right-click menu on images
+- `click-blockicon` — block icon menu (super block merge)
+- `click-editortitleicon` — document title menu for batch operations
 
-**Command System** (`src/core/`)
-- `command-meta.ts` - Defines 5 commands: convert-webp, compress-75, compress-50, compress-30, compress-10
-- `command-settings.ts` - User settings for which commands appear in menus
-- `task-runner.ts` - Sequential batch processing with progress reporting
+The plugin exposes a `PowerButtonsCommandProvider` via `getPowerButtonsIntegration()` for external automation (e.g., the Power Buttons plugin).
 
-**Image Processing** (`src/services/`)
-- `image-workflow.ts` - Core image processing logic:
-  - Fetches image from DOM/network
-  - Detects metadata (size, resolution, color depth)
-  - Applies display scale from user's drag-resize
-  - Searches compression candidates across resolution, quality, and palette variants, then picks the best visual result under the target size
-  - Always outputs WebP format
-- `kernel.ts` - SiYuan API calls (upload assets, insert blocks)
+### Core Modules (`src/core/`)
 
-**UI Components** (`src/components/SiyuanTheme/`)
-- Vue 3 components styled to match SiYuan's native UI
+- `command-meta.ts` — Command definitions (convert-webp, compress-75/50/30/10, add-border) with labels and target ratios
+- `command-settings.ts` — `PluginSettings` type and merge/defaults logic; supports legacy settings migration from `documentMenuCommands` key
+- `menu-items.ts` — Builds SiYuan `IMenu[]` structures for image and document batch menus
+- `task-runner.ts` — Sequential batch processing with progress callbacks; collects successes/failures
+- `formatters.ts` — Builds markdown result blocks and batch summary messages
+- `image-markdown.ts` — Replaces image sources in block markdown (used by replace mode)
+- `power-buttons-provider.ts` — Power Buttons integration: parses command IDs, delegates to plugin methods
+- `plugin-setting.ts` — Ensures `Setting` UI is initialized with all toggle groups
+
+### Services (`src/services/`)
+
+- `image-workflow.ts` — Core processing: fetches images via Canvas API, detects metadata, runs compression search across resolution/quality/palette variants, always outputs WebP. Key exports: `prepareProcessedImage()`, `resolveImageTarget()`, `collectImageTargets()`, `mergeSuperBlockImages()`, `addBorderToImageTarget()`
+- `compression-strategy.ts` — Scoring/selection of compression candidates. Four weighted dimensions: resolution (55%), palette (20%), quality (20%), size utilization (5%)
+- `palette-quantization.ts` — Fast RGB bit-depth quantization; skips alpha=0 pixels
+- `kernel.ts` — SiYuan kernel API calls (upload assets, insert/update markdown blocks, get block by ID)
+- `local-editor.ts` — Opens images in a configured external editor (Electron desktop only), waits for edit completion, refreshes images in the editor
+- `document-asset-stats.ts` — Calculates total embedded asset bytes for a document
+- `image-info-notification.ts` — Optional image info toast on right-click
+- `message-display.ts` — Message display helpers
+
+### UI Components (`src/components/SiyuanTheme/`)
+
+Vue 3 components styled to match SiYuan's native UI. Not used for the main menu — menus are built with SiYuan's `IMenu` API.
 
 ### Processing Flow
 
-1. User triggers command from image menu or document menu
+1. User triggers command from image menu, document menu, or Power Buttons
 2. Plugin resolves `ImageTarget` (blockId, src, displayWidth/Height)
-3. `prepareProcessedImage()` fetches, processes, and compresses image
+3. `prepareProcessedImage()` fetches image, runs compression search, returns WebP blob
 4. Result uploaded via `uploadAsset()`
-5. Markdown result inserted after original block via `insertMarkdownAfterBlock()`
-6. Original image preserved, new block shows comparison stats
+5. In insert mode: markdown block inserted after original via `insertMarkdownAfterBlock()`
+6. In replace mode: original block markdown updated via `updateMarkdownBlock()`
+7. Original image preserved in insert mode; replaced in replace mode
 
-### Build System
+### Concurrency
 
-- Vite + Vue 3 + TypeScript
-- In dev mode: builds to SiYuan workspace with livereload
-- In prod mode: builds to `./dist` and creates `package.zip`
-- Externalizes `siyuan` package (provided by SiYuan runtime)
-- Copies static assets: README, icons, i18n files, plugin.json
+Only one operation at a time via `runExclusive()` mutex (`isProcessing` flag). Concurrent triggers show an error message.
 
 ## Key Constraints
 
 - Plugin must work within SiYuan's plugin API (v2.10.14+)
-- All image processing happens client-side using Canvas API
-- Must preserve original images (non-destructive workflow)
-- Progress messages shown during long operations
+- All image processing happens client-side using Canvas API (no server, no Node.js)
+- Must preserve original images in insert mode (non-destructive workflow)
+- Progress messages shown via SiYuan's `showMessage()` API
 - Only one operation allowed at a time (mutex via `isProcessing` flag)
+- `siyuan` package is externalized — provided by SiYuan runtime, not bundled
 
 ## Testing
 
-Tests use Vitest with jsdom environment. Run single test file:
+Tests use Vitest with jsdom environment. Test files are `tests/*.test.ts`. The `siyuan` package is stubbed at `tests/stubs/siyuan.ts` (aliased in `vite.config.ts` test config).
+
 ```bash
-npx vitest run path/to/test.spec.ts
+npm test                                          # all tests
+npx vitest run tests/compression-strategy.test.ts # single file
 ```
-
-## Plugin Distribution
-
-The `package.zip` created by build contains everything needed for SiYuan's plugin marketplace. Before submitting to official Bazaar, use the `siyuan-plugin-preflight` skill to validate.

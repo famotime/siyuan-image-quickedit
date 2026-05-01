@@ -71,9 +71,11 @@ const QUALITY_STEPS = [0.92, 0.86, 0.78, 0.7, 0.62, 0.54, 0.46, 0.38, 0.3];
 const PALETTE_COLOR_LIMITS = [256, 128, 64, 32, 16];
 const MIN_COMPRESSION_QUALITY = 0.05;
 const MAX_COMPRESSION_QUALITY = 0.98;
-const QUALITY_SEARCH_ITERATIONS = 8;
+const QUALITY_CONVERGENCE_THRESHOLD = 0.02;
+const QUALITY_SEARCH_SAFETY_LIMIT = 8;
 const QUALITY_REFINEMENT_FACTORS = [0.25, 0.5, 0.75];
 const ADD_BORDER_COMMAND_LABEL = "添加图像边框";
+const MAX_NATURAL_WIDTH = 1920;
 
 function clampScale(scale: number): number {
   return Math.min(1, Math.max(0.1, scale || 1));
@@ -186,13 +188,12 @@ async function canvasToBlob(canvas: HTMLCanvasElement, quality: number): Promise
   });
 }
 
-async function renderCandidate(
+function prepareVariantCanvas(
   bitmap: ImageBitmap,
   width: number,
   height: number,
-  quality: number,
   maxColors?: number,
-): Promise<Blob> {
+): HTMLCanvasElement {
   const canvas = createCanvas(width, height);
   const context = canvas.getContext("2d");
   if (!context) {
@@ -206,6 +207,10 @@ async function renderCandidate(
     context.putImageData(imageData, 0, 0);
   }
 
+  return canvas;
+}
+
+function encodeCanvasToBlob(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
   return canvasToBlob(canvas, quality);
 }
 
@@ -261,11 +266,29 @@ function pickBetterSatisfiedCandidate(
     : currentBest;
 }
 
+function getInitialQualityGuess(targetRatio: number): number {
+  if (targetRatio <= 0.15) {
+    return 0.3;
+  }
+
+  if (targetRatio <= 0.35) {
+    return 0.5;
+  }
+
+  if (targetRatio <= 0.55) {
+    return 0.7;
+  }
+
+  return 0.85;
+}
+
 async function findBestCandidateForVariant(
   inspected: InspectedImageTarget,
   width: number,
   height: number,
   targetBytes: number,
+  canvasCache: Map<string, HTMLCanvasElement>,
+  targetRatio: number,
   maxColors?: number,
 ): Promise<{
   bestOverall: RuntimeCompressionCandidate;
@@ -273,18 +296,25 @@ async function findBestCandidateForVariant(
 }> {
   let bestOverall: RuntimeCompressionCandidate | null = null;
   let bestWithinTarget: RuntimeCompressionCandidate | null = null;
-  const cache = new Map<number, RuntimeCompressionCandidate>();
+  const candidateCache = new Map<number, RuntimeCompressionCandidate>();
 
   const evaluate = async (quality: number): Promise<RuntimeCompressionCandidate> => {
     const normalizedQuality = normalizeQuality(quality);
-    const cached = cache.get(normalizedQuality);
+    const cached = candidateCache.get(normalizedQuality);
     if (cached) {
       return cached;
     }
 
-    const blob = await renderCandidate(inspected.bitmap, width, height, normalizedQuality, maxColors);
+    const cacheKey = `${width}x${height}x${maxColors ?? 0}`;
+    let canvas = canvasCache.get(cacheKey);
+    if (!canvas) {
+      canvas = prepareVariantCanvas(inspected.bitmap, width, height, maxColors);
+      canvasCache.set(cacheKey, canvas);
+    }
+
+    const blob = await encodeCanvasToBlob(canvas, normalizedQuality);
     const candidate = toRuntimeCandidate(blob, width, height, normalizedQuality, maxColors);
-    cache.set(normalizedQuality, candidate);
+    candidateCache.set(normalizedQuality, candidate);
     bestOverall = pickSmallerCandidate(bestOverall, candidate);
 
     if (candidate.bytes <= targetBytes) {
@@ -294,44 +324,67 @@ async function findBestCandidateForVariant(
     return candidate;
   };
 
-  const highestQualityCandidate = await evaluate(MAX_COMPRESSION_QUALITY);
-  if (highestQualityCandidate.bytes <= targetBytes) {
-    return {
-      bestOverall: bestOverall!,
-      bestWithinTarget,
-    };
-  }
+  const initialGuess = getInitialQualityGuess(targetRatio);
+  const smartGuessCandidate = await evaluate(initialGuess);
 
-  const lowestQualityCandidate = await evaluate(MIN_COMPRESSION_QUALITY);
-  if (lowestQualityCandidate.bytes > targetBytes) {
-    return {
-      bestOverall: bestOverall!,
-      bestWithinTarget: null,
-    };
-  }
+  if (smartGuessCandidate.bytes <= targetBytes) {
+    let lowerBound = initialGuess;
+    let upperBound = MAX_COMPRESSION_QUALITY;
 
-  let lowerBound = MIN_COMPRESSION_QUALITY;
-  let upperBound = MAX_COMPRESSION_QUALITY;
+    for (let iteration = 0; iteration < QUALITY_SEARCH_SAFETY_LIMIT; iteration += 1) {
+      if (upperBound - lowerBound < QUALITY_CONVERGENCE_THRESHOLD) {
+        break;
+      }
 
-  for (let iteration = 0; iteration < QUALITY_SEARCH_ITERATIONS; iteration += 1) {
-    const midpoint = normalizeQuality((lowerBound + upperBound) / 2);
-    if (midpoint <= lowerBound || midpoint >= upperBound) {
-      break;
+      const midpoint = normalizeQuality((lowerBound + upperBound) / 2);
+      if (midpoint <= lowerBound || midpoint >= upperBound) {
+        break;
+      }
+
+      const candidate = await evaluate(midpoint);
+      if (candidate.bytes <= targetBytes) {
+        lowerBound = midpoint;
+      }
+      else {
+        upperBound = midpoint;
+      }
     }
 
-    const candidate = await evaluate(midpoint);
-    if (candidate.bytes <= targetBytes) {
-      lowerBound = midpoint;
-    }
-    else {
-      upperBound = midpoint;
+    for (const factor of QUALITY_REFINEMENT_FACTORS) {
+      const quality = normalizeQuality(lowerBound + (upperBound - lowerBound) * factor);
+      if (quality > lowerBound && quality < upperBound) {
+        await evaluate(quality);
+      }
     }
   }
+  else {
+    let lowerBound = MIN_COMPRESSION_QUALITY;
+    let upperBound = initialGuess;
 
-  for (const factor of QUALITY_REFINEMENT_FACTORS) {
-    const quality = normalizeQuality(lowerBound + (upperBound - lowerBound) * factor);
-    if (quality > lowerBound && quality < upperBound) {
-      await evaluate(quality);
+    for (let iteration = 0; iteration < QUALITY_SEARCH_SAFETY_LIMIT; iteration += 1) {
+      if (upperBound - lowerBound < QUALITY_CONVERGENCE_THRESHOLD) {
+        break;
+      }
+
+      const midpoint = normalizeQuality((lowerBound + upperBound) / 2);
+      if (midpoint <= lowerBound || midpoint >= upperBound) {
+        break;
+      }
+
+      const candidate = await evaluate(midpoint);
+      if (candidate.bytes <= targetBytes) {
+        lowerBound = midpoint;
+      }
+      else {
+        upperBound = midpoint;
+      }
+    }
+
+    for (const factor of QUALITY_REFINEMENT_FACTORS) {
+      const quality = normalizeQuality(lowerBound + (upperBound - lowerBound) * factor);
+      if (quality > lowerBound && quality < upperBound) {
+        await evaluate(quality);
+      }
     }
   }
 
@@ -341,35 +394,41 @@ async function findBestCandidateForVariant(
   };
 }
 
-export function buildCompressionScaleSteps(baseScale: number): number[] {
+export function buildCompressionScaleSteps(baseScale: number, originalWidth?: number): number[] {
   const normalizedBaseScale = clampScale(baseScale);
+  const naturalScale = originalWidth && originalWidth > MAX_NATURAL_WIDTH
+    ? clampScale(MAX_NATURAL_WIDTH / originalWidth)
+    : 1;
+  const effectiveBaseScale = Math.min(normalizedBaseScale, naturalScale);
   const steps = [
-    1,
-    normalizedBaseScale,
-    normalizedBaseScale * 0.9,
-    normalizedBaseScale * 0.8,
-    normalizedBaseScale * 0.7,
-    normalizedBaseScale * 0.6,
-    normalizedBaseScale * 0.5,
-    normalizedBaseScale * 0.4,
-    normalizedBaseScale * 0.3,
-    normalizedBaseScale * 0.2,
+    naturalScale,
+    effectiveBaseScale,
+    effectiveBaseScale * 0.9,
+    effectiveBaseScale * 0.8,
+    effectiveBaseScale * 0.7,
+    effectiveBaseScale * 0.6,
+    effectiveBaseScale * 0.5,
+    effectiveBaseScale * 0.4,
+    effectiveBaseScale * 0.3,
+    effectiveBaseScale * 0.2,
   ].map(clampScale);
 
   return [...new Set(steps)];
 }
 
 async function convertToWebp(inspected: InspectedImageTarget): Promise<PreparedImageResult["output"]> {
+  const naturalScale = inspected.original.width > MAX_NATURAL_WIDTH
+    ? clampScale(MAX_NATURAL_WIDTH / inspected.original.width)
+    : 1;
+  const width = Math.round(inspected.original.width * naturalScale);
+  const height = Math.round(inspected.original.height * naturalScale);
+  const canvas = prepareVariantCanvas(inspected.bitmap, width, height);
+
   let bestBlob: Blob | null = null;
   let bestQuality = QUALITY_STEPS[0];
 
   for (const quality of QUALITY_STEPS.slice(0, 4)) {
-    const blob = await renderCandidate(
-      inspected.bitmap,
-      inspected.original.width,
-      inspected.original.height,
-      quality,
-    );
+    const blob = await encodeCanvasToBlob(canvas, quality);
     if (!bestBlob || blob.size < bestBlob.size) {
       bestBlob = blob;
       bestQuality = quality;
@@ -382,19 +441,14 @@ async function convertToWebp(inspected: InspectedImageTarget): Promise<PreparedI
     }
   }
 
-  const blob = bestBlob || await renderCandidate(
-    inspected.bitmap,
-    inspected.original.width,
-    inspected.original.height,
-    bestQuality,
-  );
+  const blob = bestBlob || await encodeCanvasToBlob(canvas, bestQuality);
 
   return {
     blob,
     bytes: blob.size,
     format: "webp",
-    height: inspected.original.height,
-    width: inspected.original.width,
+    height,
+    width,
   };
 }
 
@@ -410,10 +464,11 @@ async function compressToTargetRatio(
   }
 
   const targetBytes = Math.max(1, Math.floor(inspected.original.bytes * targetRatio));
+  const canvasCache = new Map<string, HTMLCanvasElement>();
   let bestOverallCandidate: RuntimeCompressionCandidate | null = null;
   let bestWithinTargetCandidate: RuntimeCompressionCandidate | null = null;
 
-  for (const scale of buildCompressionScaleSteps(inspected.displayScale)) {
+  for (const scale of buildCompressionScaleSteps(inspected.displayScale, inspected.original.width)) {
     const width = Math.max(1, Math.round(inspected.original.width * scale));
     const height = Math.max(1, Math.round(inspected.original.height * scale));
     onProgress?.(`正在尝试 ${width}×${height}`);
@@ -423,6 +478,8 @@ async function compressToTargetRatio(
       width,
       height,
       targetBytes,
+      canvasCache,
+      targetRatio,
     );
     bestOverallCandidate = pickSmallerCandidate(bestOverallCandidate, fullColorResult.bestOverall);
     if (fullColorResult.bestWithinTarget) {
@@ -441,6 +498,8 @@ async function compressToTargetRatio(
         width,
         height,
         targetBytes,
+        canvasCache,
+        targetRatio,
         maxColors,
       );
       bestOverallCandidate = pickSmallerCandidate(bestOverallCandidate, paletteResult.bestOverall);
