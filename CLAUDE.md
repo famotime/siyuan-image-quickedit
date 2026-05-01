@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-SiYuan note-taking plugin (思源图片快剪) for quick image viewing, conversion, compression, and batch processing. Users right-click images to convert to WebP or compress to target sizes (75%, 50%, 30%, 10%). Supports batch operations on all images in a document, super block image merging, image border addition, and opening images in a local editor.
+SiYuan note-taking plugin (图片快剪) for quick image viewing, conversion, compression, and batch processing. Users right-click images to convert to WebP or compress to target sizes (75%, 50%, 30%, 10%). Supports batch operations on all images in a document, super block image merging, image border addition, and opening images in a local editor.
 
 ## Architecture
 

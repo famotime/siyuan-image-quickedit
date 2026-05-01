@@ -527,7 +527,7 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
             : "原图不会删除，处理结果会插入到对应图片块后方。";
 
           confirm(
-            "思源图片快剪",
+            "图片快剪",
             `将对本文档中的 ${targets.length} 张图片执行“${commandLabel}”。${detail}`,
             () => {
               void this.runExclusive(async () => this.processDocumentTargets(targets, commandId, mode));
@@ -1006,7 +1006,7 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
       ? "原图将被直接替换，正文文本保持不变。"
       : "原图不会删除，处理结果会插入到对应图片块后方。";
     const confirmed = await this.askConfirm(
-      "思源图片快剪",
+      "图片快剪",
       `将对本文档中的 ${targets.length} 张图片执行“${commandLabel}”。${detail}`,
     );
     if (!confirmed) {

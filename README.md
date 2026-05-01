@@ -6,7 +6,7 @@
 
 ![image](https://raw.githubusercontent.com/famotime/siyuan-image-quickedit/main/assets/image-20260328212744-2amfjqc.png)
 
-## 思源图片快剪，缓解你的存储焦虑
+## 图片快剪，缓解你的存储焦虑
 
 但实际上笔记中的很多图片并不需要保存高分辨率的原图，只需要看得清就行了。所以我就针对如何快速压缩图片开发了一个小插件，为思源笔记中的图片提供快速转换、压缩和批量处理能力。
 
