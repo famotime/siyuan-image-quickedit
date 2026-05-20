@@ -19,6 +19,7 @@ import {
   DEFAULT_SUPER_BLOCK_MERGE_OPTIONS,
   type CommandMenuSettingKey,
   type CommandId,
+  type CompressionStrategy,
   type DocumentBatchCommandId,
   type PluginSettings,
   type SuperBlockMergeOptions,
@@ -115,6 +116,7 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
       this.createImageInfoNotificationToggle.bind(this),
       this.createLocalEditorPathInput.bind(this),
       this.createSuperBlockMergeOptionsGroup.bind(this),
+      this.createCompressionStrategySelect.bind(this),
     );
 
     this.eventBus.on("open-menu-image", this.onImageMenu);
@@ -157,6 +159,7 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
       this.createImageInfoNotificationToggle.bind(this),
       this.createLocalEditorPathInput.bind(this),
       this.createSuperBlockMergeOptionsGroup.bind(this),
+      this.createCompressionStrategySelect.bind(this),
     ).open(this.name);
   }
 
@@ -323,6 +326,37 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
       }),
     );
 
+    return wrapper;
+  }
+
+  private createCompressionStrategySelect(): HTMLElement {
+    const wrapper = document.createElement("div");
+    wrapper.className = "image-quickedit-setting-group";
+
+    const select = document.createElement("select");
+    select.className = "b3-select";
+
+    const options = [
+      { value: "comprehensive", label: "综合比较（耗时长）" },
+      { value: "resolution-first", label: "优先压缩分辨率" },
+      { value: "color-first", label: "优先压缩颜色" },
+    ] as const;
+
+    for (const option of options) {
+      const optionElement = document.createElement("option");
+      optionElement.value = option.value;
+      optionElement.textContent = option.label;
+      optionElement.selected = this.settings.compressionStrategy === option.value;
+      select.appendChild(optionElement);
+    }
+
+    select.addEventListener("change", () => {
+      this.persistSettings({
+        compressionStrategy: select.value as CompressionStrategy,
+      });
+    });
+
+    wrapper.appendChild(select);
     return wrapper;
   }
 
@@ -736,6 +770,7 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
     const prepared = await prepareProcessedImage(
       target,
       commandId,
+      this.settings.compressionStrategy,
       message => this.reportProgress(`${COMMAND_DEFINITIONS[commandId].label}：${message}`),
     );
 

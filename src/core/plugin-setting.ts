@@ -25,6 +25,7 @@ export function ensurePluginSetting<TSetting extends SettingLike>(
   createImageInfoNotificationToggle: () => HTMLElement,
   createLocalEditorPathInput: () => HTMLElement,
   createSuperBlockMergeOptionsGroup: () => HTMLElement,
+  createCompressionStrategySelect: () => HTMLElement,
 ): TSetting {
   if (host.setting) {
     return host.setting;
@@ -51,6 +52,12 @@ export function ensurePluginSetting<TSetting extends SettingLike>(
     description: "控制图片右键菜单里展示哪些单图操作，以及是否显示超级块图片合并。",
     direction: "column",
     title: "图片右键菜单",
+  });
+  setting.addItem({
+    createActionElement: createCompressionStrategySelect,
+    description: "综合比较尝试所有分辨率和颜色组合寻找最佳质量，耗时较长；优先压缩分辨率保持原色优先缩小尺寸；优先压缩颜色保持分辨率优先减少色彩。两种优先策略在满足目标大小后立即返回，未满足时自动回退到综合比较。",
+    direction: "column",
+    title: "压缩策略",
   });
   setting.addItem({
     createActionElement: createSuperBlockMergeOptionsGroup,

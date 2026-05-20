@@ -4,6 +4,7 @@ import { COMMAND_DEFINITIONS } from "@/core/command-meta.ts";
 import {
   DEFAULT_SUPER_BLOCK_MERGE_OPTIONS,
   type CommandId,
+  type CompressionStrategy,
   type SuperBlockMergeOptions,
 } from "@/core/command-settings.ts";
 import { buildImageInfoLabel, buildResultMarkdown } from "@/core/formatters.ts";
@@ -452,19 +453,23 @@ async function convertToWebp(inspected: InspectedImageTarget): Promise<PreparedI
   };
 }
 
-async function compressToTargetRatio(
+function candidateToOutput(candidate: RuntimeCompressionCandidate): PreparedImageResult["output"] {
+  return {
+    blob: candidate.blob,
+    bytes: candidate.bytes,
+    format: candidate.format,
+    height: candidate.height,
+    width: candidate.width,
+  };
+}
+
+async function compressComprehensive(
   inspected: InspectedImageTarget,
-  commandId: CommandId,
+  targetBytes: number,
+  targetRatio: number,
+  canvasCache: Map<string, HTMLCanvasElement>,
   onProgress?: (message: string) => void,
 ): Promise<PreparedImageResult["output"]> {
-  const command = COMMAND_DEFINITIONS[commandId];
-  const targetRatio = command.targetRatio;
-  if (!targetRatio) {
-    throw new Error(`命令 ${commandId} 没有目标压缩比例。`);
-  }
-
-  const targetBytes = Math.max(1, Math.floor(inspected.original.bytes * targetRatio));
-  const canvasCache = new Map<string, HTMLCanvasElement>();
   let bestOverallCandidate: RuntimeCompressionCandidate | null = null;
   let bestWithinTargetCandidate: RuntimeCompressionCandidate | null = null;
 
@@ -515,26 +520,126 @@ async function compressToTargetRatio(
   }
 
   if (bestWithinTargetCandidate) {
-    return {
-      blob: bestWithinTargetCandidate.blob,
-      bytes: bestWithinTargetCandidate.bytes,
-      format: bestWithinTargetCandidate.format,
-      height: bestWithinTargetCandidate.height,
-      width: bestWithinTargetCandidate.width,
-    };
+    return candidateToOutput(bestWithinTargetCandidate);
   }
 
   if (!bestOverallCandidate) {
     throw new Error("无法生成压缩结果。");
   }
 
-  return {
-    blob: bestOverallCandidate.blob,
-    bytes: bestOverallCandidate.bytes,
-    format: bestOverallCandidate.format,
-    height: bestOverallCandidate.height,
-    width: bestOverallCandidate.width,
-  };
+  return candidateToOutput(bestOverallCandidate);
+}
+
+async function compressResolutionFirst(
+  inspected: InspectedImageTarget,
+  targetBytes: number,
+  targetRatio: number,
+  canvasCache: Map<string, HTMLCanvasElement>,
+  onProgress?: (message: string) => void,
+): Promise<RuntimeCompressionCandidate | null> {
+  for (const scale of buildCompressionScaleSteps(inspected.displayScale, inspected.original.width)) {
+    const width = Math.max(1, Math.round(inspected.original.width * scale));
+    const height = Math.max(1, Math.round(inspected.original.height * scale));
+    onProgress?.(`正在尝试 ${width}×${height}（保持原色）`);
+
+    const result = await findBestCandidateForVariant(
+      inspected,
+      width,
+      height,
+      targetBytes,
+      canvasCache,
+      targetRatio,
+    );
+
+    if (result.bestWithinTarget) {
+      return result.bestWithinTarget;
+    }
+  }
+
+  return null;
+}
+
+async function compressColorFirst(
+  inspected: InspectedImageTarget,
+  targetBytes: number,
+  targetRatio: number,
+  canvasCache: Map<string, HTMLCanvasElement>,
+  onProgress?: (message: string) => void,
+): Promise<RuntimeCompressionCandidate | null> {
+  const scales = buildCompressionScaleSteps(inspected.displayScale, inspected.original.width);
+  const bestScale = scales[0];
+  const width = Math.max(1, Math.round(inspected.original.width * bestScale));
+  const height = Math.max(1, Math.round(inspected.original.height * bestScale));
+
+  for (const maxColors of PALETTE_COLOR_LIMITS) {
+    onProgress?.(`正在尝试 ${width}×${height} / ${maxColors} 色`);
+    const result = await findBestCandidateForVariant(
+      inspected,
+      width,
+      height,
+      targetBytes,
+      canvasCache,
+      targetRatio,
+      maxColors,
+    );
+    if (result.bestWithinTarget) {
+      return result.bestWithinTarget;
+    }
+  }
+
+  for (const scale of scales.slice(1)) {
+    const w = Math.max(1, Math.round(inspected.original.width * scale));
+    const h = Math.max(1, Math.round(inspected.original.height * scale));
+    onProgress?.(`正在尝试 ${w}×${h}（保持原色）`);
+    const result = await findBestCandidateForVariant(
+      inspected,
+      w,
+      h,
+      targetBytes,
+      canvasCache,
+      targetRatio,
+    );
+    if (result.bestWithinTarget) {
+      return result.bestWithinTarget;
+    }
+  }
+
+  return null;
+}
+
+async function compressToTargetRatio(
+  inspected: InspectedImageTarget,
+  commandId: CommandId,
+  strategy: CompressionStrategy,
+  onProgress?: (message: string) => void,
+): Promise<PreparedImageResult["output"]> {
+  const command = COMMAND_DEFINITIONS[commandId];
+  const targetRatio = command.targetRatio;
+  if (!targetRatio) {
+    throw new Error(`命令 ${commandId} 没有目标压缩比例。`);
+  }
+
+  const targetBytes = Math.max(1, Math.floor(inspected.original.bytes * targetRatio));
+  const canvasCache = new Map<string, HTMLCanvasElement>();
+
+  if (strategy === "resolution-first") {
+    const fastResult = await compressResolutionFirst(inspected, targetBytes, targetRatio, canvasCache, onProgress);
+    if (fastResult) {
+      return candidateToOutput(fastResult);
+    }
+
+    onProgress?.("分辨率优先未满足要求，尝试综合压缩…");
+  }
+  else if (strategy === "color-first") {
+    const fastResult = await compressColorFirst(inspected, targetBytes, targetRatio, canvasCache, onProgress);
+    if (fastResult) {
+      return candidateToOutput(fastResult);
+    }
+
+    onProgress?.("颜色优先未满足要求，尝试综合压缩…");
+  }
+
+  return compressComprehensive(inspected, targetBytes, targetRatio, canvasCache, onProgress);
 }
 
 export function resolveImageTarget(element: HTMLElement): ImageTarget | null {
@@ -753,6 +858,7 @@ async function resolveBlockForTarget(blockId: string): Promise<Pick<Block, "id" 
 export async function prepareProcessedImage(
   target: ImageTarget,
   commandId: CommandId,
+  strategy: CompressionStrategy,
   onProgress?: (message: string) => void,
 ): Promise<PreparedImageResult> {
   const inspected = await inspectImageTarget(target);
@@ -760,7 +866,7 @@ export async function prepareProcessedImage(
   try {
     const output = commandId === "convert-webp"
       ? await convertToWebp(inspected)
-      : await compressToTargetRatio(inspected, commandId, onProgress);
+      : await compressToTargetRatio(inspected, commandId, strategy, onProgress);
     const sourceBaseName = inspected.fileName.replace(/\.[^.]+$/, "") || inspected.fileName;
 
     return {

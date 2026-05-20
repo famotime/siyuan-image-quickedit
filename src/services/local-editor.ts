@@ -260,7 +260,7 @@ function normalizePlatformPath(
     return filePath.replace(/^\/([a-zA-Z]:\/)/, "$1").replace(/\//g, "\\");
   }
 
-  return filePath;
+  return filePath.replace(/^\/+/, "/");
 }
 
 function detectPathSeparator(filePath: string): "\\" | "/" {

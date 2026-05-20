@@ -24,6 +24,7 @@ test("ensurePluginSetting creates and assigns the plugin setting once", () => {
   const createImageInfoNotificationToggle = vi.fn(() => ({}) as HTMLElement);
   const createLocalEditorPathInput = vi.fn(() => ({}) as HTMLElement);
   const createSuperBlockMergeOptionsGroup = vi.fn(() => ({}) as HTMLElement);
+  const createCompressionStrategySelect = vi.fn(() => ({}) as HTMLElement);
 
   const setting = ensurePluginSetting(
     host,
@@ -33,6 +34,7 @@ test("ensurePluginSetting creates and assigns the plugin setting once", () => {
     createImageInfoNotificationToggle,
     createLocalEditorPathInput,
     createSuperBlockMergeOptionsGroup,
+    createCompressionStrategySelect,
   );
   const reusedSetting = ensurePluginSetting(
     host,
@@ -42,16 +44,18 @@ test("ensurePluginSetting creates and assigns the plugin setting once", () => {
     createImageInfoNotificationToggle,
     createLocalEditorPathInput,
     createSuperBlockMergeOptionsGroup,
+    createCompressionStrategySelect,
   );
 
   expect(setting).toBe(host.setting);
   expect(reusedSetting).toBe(setting);
   expect(setting.options.width).toBe("640px");
-  expect(setting.items).toHaveLength(6);
+  expect(setting.items).toHaveLength(7);
   expect(setting.items.map(item => item.title)).toEqual([
     "本地图片编辑",
     "图片信息通知",
     "图片右键菜单",
+    "压缩策略",
     "超级块图片合并",
     "文档批量菜单（新增）",
     "文档批量菜单（替换）",
@@ -61,4 +65,5 @@ test("ensurePluginSetting creates and assigns the plugin setting once", () => {
   expect(createImageInfoNotificationToggle).not.toHaveBeenCalled();
   expect(createLocalEditorPathInput).not.toHaveBeenCalled();
   expect(createSuperBlockMergeOptionsGroup).not.toHaveBeenCalled();
+  expect(createCompressionStrategySelect).not.toHaveBeenCalled();
 });

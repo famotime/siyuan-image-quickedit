@@ -19,6 +19,14 @@ export type DocumentBatchCommandId = (typeof DOCUMENT_BATCH_COMMAND_ORDER)[numbe
 
 export type DocumentBatchCommandToggleMap = Record<DocumentBatchCommandId, boolean>;
 
+export const COMPRESSION_STRATEGY_OPTIONS = [
+  "comprehensive",
+  "resolution-first",
+  "color-first",
+] as const;
+
+export type CompressionStrategy = (typeof COMPRESSION_STRATEGY_OPTIONS)[number];
+
 export interface SuperBlockMergeOptions {
   gapPx: number;
   borderWidthPx: number;
@@ -33,6 +41,7 @@ export interface PluginSettings {
   showAddImageBorderMenuItem: boolean;
   showSuperBlockMergeMenuItem: boolean;
   showImageInfoNotification: boolean;
+  compressionStrategy: CompressionStrategy;
   superBlockMergeOptions: SuperBlockMergeOptions;
 }
 
@@ -73,6 +82,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   showAddImageBorderMenuItem: false,
   showSuperBlockMergeMenuItem: true,
   showImageInfoNotification: false,
+  compressionStrategy: "comprehensive",
   superBlockMergeOptions: { ...DEFAULT_SUPER_BLOCK_MERGE_OPTIONS },
 };
 
@@ -101,6 +111,9 @@ export function mergeSettings(settings?: LegacyPluginSettings | null): PluginSet
     showSuperBlockMergeMenuItem:
       settings?.showSuperBlockMergeMenuItem ?? DEFAULT_SETTINGS.showSuperBlockMergeMenuItem,
     showImageInfoNotification: settings?.showImageInfoNotification ?? DEFAULT_SETTINGS.showImageInfoNotification,
+    compressionStrategy: (COMPRESSION_STRATEGY_OPTIONS as readonly string[]).includes(settings?.compressionStrategy ?? "")
+      ? settings!.compressionStrategy!
+      : DEFAULT_SETTINGS.compressionStrategy,
     superBlockMergeOptions: {
       gapPx: normalizeNonNegativeInteger(superBlockMergeOptions?.gapPx, DEFAULT_SUPER_BLOCK_MERGE_OPTIONS.gapPx),
       borderWidthPx: normalizeNonNegativeInteger(

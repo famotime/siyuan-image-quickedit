@@ -118,6 +118,25 @@ test("getEnabledCommandIds keeps PRD command order and filters disabled items", 
   ]);
 });
 
+test("mergeSettings defaults compressionStrategy to comprehensive", () => {
+  const settings = mergeSettings({});
+  expect(settings.compressionStrategy).toBe("comprehensive");
+});
+
+test("mergeSettings preserves explicit compressionStrategy", () => {
+  const settings = mergeSettings({
+    compressionStrategy: "resolution-first",
+  });
+  expect(settings.compressionStrategy).toBe("resolution-first");
+});
+
+test("mergeSettings rejects invalid compressionStrategy values", () => {
+  const settings = mergeSettings({
+    compressionStrategy: "invalid" as "comprehensive",
+  });
+  expect(settings.compressionStrategy).toBe("comprehensive");
+});
+
 test("getEnabledDocumentBatchCommandIds keeps add-border disabled by default", () => {
   const enabled = getEnabledDocumentBatchCommandIds(DEFAULT_SETTINGS.documentInsertMenuCommands);
 
