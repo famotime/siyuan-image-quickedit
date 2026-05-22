@@ -14,6 +14,7 @@ import {
   compareSatisfiedCandidates,
   type CompressionCandidate,
 } from "@/services/compression-strategy.ts";
+import { getBlockById } from "@/services/kernel.ts";
 import { quantizeRgbaBufferToMaxColors } from "@/services/palette-quantization.ts";
 
 export interface ImageTarget {
@@ -851,8 +852,7 @@ export async function buildImageInfoForTarget(target: ImageTarget): Promise<stri
 }
 
 async function resolveBlockForTarget(blockId: string): Promise<Pick<Block, "id" | "root_id"> | null> {
-  const kernel = await import("@/services/kernel.ts");
-  return kernel.getBlockById(blockId);
+  return getBlockById(blockId);
 }
 
 export async function prepareProcessedImage(

@@ -1,3 +1,8 @@
+import {
+  getDocAssets,
+  statAsset,
+} from "@/services/kernel.ts";
+
 interface LoadDocumentEmbeddedAssetBytesOptions {
   getDocAssets?: (documentId: string) => Promise<unknown>;
   statAsset?: (path: string) => Promise<unknown>;
@@ -121,11 +126,9 @@ async function safeCall<T>(action: () => Promise<T>): Promise<T | null> {
 }
 
 async function defaultGetDocAssets(documentId: string): Promise<unknown> {
-  const api = await import("@/services/kernel.ts");
-  return api.getDocAssets(documentId);
+  return getDocAssets(documentId);
 }
 
 async function defaultStatAsset(path: string): Promise<unknown> {
-  const api = await import("@/services/kernel.ts");
-  return api.statAsset(path);
+  return statAsset(path);
 }

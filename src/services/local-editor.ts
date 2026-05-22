@@ -223,7 +223,7 @@ async function getFsPromises(): Promise<typeof import("node:fs/promises")> {
     return nodeRequire("node:fs/promises") as typeof import("node:fs/promises");
   }
 
-  return import("node:fs/promises");
+  return importNodeModule("node:fs/promises");
 }
 
 async function getNodeOs(): Promise<typeof import("node:os")> {
@@ -232,7 +232,7 @@ async function getNodeOs(): Promise<typeof import("node:os")> {
     return nodeRequire("node:os") as typeof import("node:os");
   }
 
-  return import("node:os");
+  return importNodeModule("node:os");
 }
 
 async function getNodePath(): Promise<typeof import("node:path")> {
@@ -241,7 +241,21 @@ async function getNodePath(): Promise<typeof import("node:path")> {
     return nodeRequire("node:path") as typeof import("node:path");
   }
 
-  return import("node:path");
+  return importNodeModule("node:path");
+}
+
+async function importNodeModule<T>(specifier: string): Promise<T> {
+  const builtinModule = (globalThis as typeof globalThis & {
+    process?: NodeJS.Process & {
+      getBuiltinModule?: <Module>(specifier: string) => Module;
+    };
+  }).process?.getBuiltinModule?.<T>(specifier);
+  if (builtinModule) {
+    return builtinModule;
+  }
+
+  const dynamicImport = Function("specifier", "return import(specifier)") as (specifier: string) => Promise<T>;
+  return dynamicImport(specifier);
 }
 
 function joinPlatformPath(basePath: string, relativePath: string): string {
