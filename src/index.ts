@@ -58,6 +58,7 @@ import {
   buildProcessedResultMarkdown,
   collectSuperBlockImageTargets,
   collectImageTargets,
+  collectImageTargetsByDocId,
   mergeSuperBlockImages,
   prepareProcessedImage,
   resolveImageTarget,
@@ -966,7 +967,7 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
 
   private async invokePowerButtonsCommand(
     commandId: string,
-    _context: PowerButtonsInvokeContext,
+    context: PowerButtonsInvokeContext,
   ): Promise<PowerButtonsInvokeResult> {
     const command = parsePublicPowerButtonsCommandId(commandId);
     if (!command) {
@@ -1016,20 +1017,18 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
       return this.startPowerButtonsTask(async () => this.mergeImagesForSuperBlock(superBlockElement));
     }
 
-    const protyle = this.resolvePowerButtonsProtyle();
-    if (!protyle) {
-      return {
-        errorCode: "context-unavailable",
-        message: "请先打开包含图片的文档，再执行该操作。",
-        ok: false,
-      };
-    }
-
-    const targets = collectImageTargets(protyle);
+    const targets = context.docId
+      ? await collectImageTargetsByDocId(context.docId)
+      : (() => {
+          const protyle = this.resolvePowerButtonsProtyle();
+          return protyle ? collectImageTargets(protyle) : [];
+        })();
     if (!targets.length) {
       return {
         errorCode: "context-unavailable",
-        message: "当前文档中没有可处理的图片。请先打开包含图片的文档，再执行该操作。",
+        message: context.docId
+          ? "目标文档中没有可处理的图片。"
+          : "请先打开包含图片的文档，再执行该操作。",
         ok: false,
       };
     }

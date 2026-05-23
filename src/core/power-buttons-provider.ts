@@ -41,6 +41,7 @@ const CURRENT_DOCUMENT_INSERT_COMMANDS: PowerButtonsPublicCommand[] = COMMAND_OR
   category: CURRENT_DOCUMENT_INSERT_CATEGORY,
   description: '对当前文档中的全部图片执行处理，并在原图后插入结果图片。',
   id: `current-document.insert.${commandId}`,
+  supportsTargetDoc: true,
   title: `当前文档：${COMMAND_DEFINITIONS[commandId].insertBatchLabel}`,
 }));
 
@@ -48,6 +49,7 @@ const CURRENT_DOCUMENT_REPLACE_COMMANDS: PowerButtonsPublicCommand[] = COMMAND_O
   category: CURRENT_DOCUMENT_REPLACE_CATEGORY,
   description: '对当前文档中的全部图片执行处理，并直接替换原图。',
   id: `current-document.replace.${commandId}`,
+  supportsTargetDoc: true,
   title: `当前文档：${COMMAND_DEFINITIONS[commandId].replaceBatchLabel}`,
 }));
 

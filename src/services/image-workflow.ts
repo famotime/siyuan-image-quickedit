@@ -15,6 +15,7 @@ import {
   type CompressionCandidate,
 } from "@/services/compression-strategy.ts";
 import { getBlockById } from "@/services/kernel.ts";
+import { getDocBlockMarkdowns } from "@/services/kernel-query.ts";
 import { quantizeRgbaBufferToMaxColors } from "@/services/palette-quantization.ts";
 
 export interface ImageTarget {
@@ -694,6 +695,56 @@ export function collectImageTargets(protyle: IProtyle): ImageTarget[] {
       seen.add(key);
       return true;
     });
+}
+
+function extractImageSrcsFromMarkdown(markdown: string): string[] {
+  const sources: string[] = [];
+
+  const mdRegex = /!\[[^\]]*\]\((<[^>]+>|[^)\s]+)([^)]*)\)/g;
+  let match = mdRegex.exec(markdown);
+  while (match) {
+    sources.push(match[1].replace(/^<|>$/g, ""));
+    match = mdRegex.exec(markdown);
+  }
+
+  if (sources.length > 0) {
+    return sources;
+  }
+
+  const htmlRegex = /<img\b[^>]*?\ssrc=["']([^"']+)["'][^>]*>/gi;
+  match = htmlRegex.exec(markdown);
+  while (match) {
+    sources.push(match[1]);
+    match = htmlRegex.exec(markdown);
+  }
+
+  return sources;
+}
+
+export async function collectImageTargetsByDocId(docId: string): Promise<ImageTarget[]> {
+  const blocks = await getDocBlockMarkdowns(docId);
+  const seen = new Set<string>();
+  const targets: ImageTarget[] = [];
+
+  for (const block of blocks) {
+    if (!block.markdown) continue;
+    const srcs = extractImageSrcsFromMarkdown(block.markdown);
+    for (const src of srcs) {
+      if (!src.startsWith("/assets/")) continue;
+      const key = `${block.id}|${src}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      targets.push({
+        alt: "processed image",
+        blockId: block.id,
+        displayHeight: 0,
+        displayWidth: 0,
+        src,
+      });
+    }
+  }
+
+  return targets;
 }
 
 export function collectSuperBlockImageTargets(superBlockElement: HTMLElement): ImageTarget[] {

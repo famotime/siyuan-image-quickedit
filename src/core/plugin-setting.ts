@@ -55,7 +55,7 @@ export function ensurePluginSetting<TSetting extends SettingLike>(
   });
   setting.addItem({
     createActionElement: createCompressionStrategySelect,
-    description: "综合比较尝试所有分辨率和颜色组合寻找最佳质量，耗时较长；优先压缩分辨率保持原色优先缩小尺寸；优先压缩颜色保持分辨率优先减少色彩。两种优先策略在满足目标大小后立即返回，未满足时自动回退到综合比较。",
+    description: "综合比较：尝试所有组合寻找最佳质量；<br>优先压缩分辨率：保持原色优先缩小尺寸；<br>优先压缩颜色：保持分辨率优先减少色彩。",
     direction: "column",
     title: "压缩策略",
   });

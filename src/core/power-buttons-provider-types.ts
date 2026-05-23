@@ -1,9 +1,10 @@
 export interface PowerButtonsInvokeContext {
-  trigger: 'button-click';
-  sourcePlugin: 'siyuan-power-buttons';
+  trigger: 'button-click' | 'workflow-step';
+  sourcePlugin: string;
   sourcePluginVersion?: string;
   surface?: string;
   buttonId?: string;
+  docId?: string;
 }
 
 type PowerButtonsInvokeErrorCode =
@@ -32,6 +33,7 @@ export interface PowerButtonsPublicCommand {
   description?: string;
   category?: string;
   desktopOnly?: boolean;
+  supportsTargetDoc?: boolean;
 }
 
 export interface PowerButtonsCommandProvider {
