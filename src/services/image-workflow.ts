@@ -723,15 +723,27 @@ function extractImageSrcsFromMarkdown(markdown: string): string[] {
 
 export async function collectImageTargetsByDocId(docId: string): Promise<ImageTarget[]> {
   const blocks = await getDocBlockMarkdowns(docId);
+  console.log(`[image-quickedit] collectImageTargetsByDocId: docId=${docId}, blocks=${blocks.length}`);
   const seen = new Set<string>();
   const targets: ImageTarget[] = [];
 
+  let blocksWithMarkdown = 0;
+  let totalSrcs = 0;
+  let nonAssetSrcs = 0;
+
   for (const block of blocks) {
     if (!block.markdown) continue;
+    blocksWithMarkdown++;
     const srcs = extractImageSrcsFromMarkdown(block.markdown);
+    totalSrcs += srcs.length;
     for (const src of srcs) {
-      if (!src.startsWith("/assets/")) continue;
-      const key = `${block.id}|${src}`;
+      const normalizedSrc = src.startsWith("/") ? src : `/${src}`;
+      if (!normalizedSrc.startsWith("/assets/")) {
+        nonAssetSrcs++;
+        console.log(`[image-quickedit] skipping non-asset src: ${src}`);
+        continue;
+      }
+      const key = `${block.id}|${normalizedSrc}`;
       if (seen.has(key)) continue;
       seen.add(key);
       targets.push({
@@ -739,11 +751,12 @@ export async function collectImageTargetsByDocId(docId: string): Promise<ImageTa
         blockId: block.id,
         displayHeight: 0,
         displayWidth: 0,
-        src,
+        src: normalizedSrc,
       });
     }
   }
 
+  console.log(`[image-quickedit] collectImageTargetsByDocId result: blocksWithMarkdown=${blocksWithMarkdown}, totalSrcs=${totalSrcs}, nonAssetSrcs=${nonAssetSrcs}, targets=${targets.length}`);
   return targets;
 }
 

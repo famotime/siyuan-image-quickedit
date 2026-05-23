@@ -14,7 +14,7 @@ describe('power buttons provider', () => {
 
     expect(provider).toEqual(expect.objectContaining({
       protocol: 'power-buttons-command-provider',
-      protocolVersion: 1,
+      protocolVersion: 2,
       providerId: 'siyuan-image-quickedit',
       providerName: '图片快剪 / Image QuickEdit',
       providerVersion: '1.0.3',

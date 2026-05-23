@@ -55,7 +55,7 @@ describe('power buttons integration', () => {
 
     expect(provider).toEqual(expect.objectContaining({
       protocol: 'power-buttons-command-provider',
-      protocolVersion: 1,
+      protocolVersion: 2,
       providerId: 'siyuan-image-quickedit',
     }));
     expect(await provider.listCommands()).toEqual(expect.arrayContaining([

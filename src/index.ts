@@ -1017,13 +1017,18 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
       return this.startPowerButtonsTask(async () => this.mergeImagesForSuperBlock(superBlockElement));
     }
 
+    console.log(`[image-quickedit] invokePowerButtonsCommand: commandId=${commandId}, docId=${context.docId || "(none)"}, trigger=${context.trigger}, scope=${context.scope || "(none)"}`);
+
     const targets = context.docId
       ? await collectImageTargetsByDocId(context.docId)
       : (() => {
           const protyle = this.resolvePowerButtonsProtyle();
           return protyle ? collectImageTargets(protyle) : [];
         })();
+    console.log(`[image-quickedit] collected ${targets.length} image targets for docId=${context.docId || "(current)"}`);
+
     if (!targets.length) {
+      console.warn("[image-quickedit] no targets found, returning context-unavailable");
       return {
         errorCode: "context-unavailable",
         message: context.docId
@@ -1037,18 +1042,50 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
       ? COMMAND_DEFINITIONS[command.commandId].replaceBatchLabel
       : COMMAND_DEFINITIONS[command.commandId].insertBatchLabel;
     const detail = command.mode === "replace"
-      ? "原图将被直接替换，正文文本保持不变。"
+      ? "原图将直接替换，正文文本保持不变。"
       : "原图不会删除，处理结果会插入到对应图片块后方。";
-    const confirmed = await this.askConfirm(
-      "图片快剪",
-      `将对本文档中的 ${targets.length} 张图片执行“${commandLabel}”。${detail}`,
-    );
-    if (!confirmed) {
-      return {
-        alreadyNotified: true,
-        errorCode: "execution-failed",
-        ok: false,
-      };
+
+    if (context.trigger === "workflow-step") {
+      console.log("[image-quickedit] workflow-step trigger, skipping confirmation");
+    } else {
+      const confirmed = await this.askConfirm(
+        "图片快剪",
+        `将对本文档中的 ${targets.length} 张图片执行"${commandLabel}"。${detail}`,
+      );
+      if (!confirmed) {
+        console.log("[image-quickedit] user cancelled confirmation");
+        return {
+          alreadyNotified: true,
+          errorCode: "execution-failed",
+          ok: false,
+        };
+      }
+    }
+
+    console.log(`[image-quickedit] starting task for ${targets.length} targets, isProcessing=${this.isProcessing}, trigger=${context.trigger}`);
+
+    if (context.trigger === "workflow-step") {
+      if (this.isProcessing) {
+        console.warn("[image-quickedit] workflow-step: mutex locked, returning provider-unavailable");
+        return {
+          alreadyNotified: true,
+          errorCode: "provider-unavailable",
+          message: "图片快剪正在处理，请等待当前任务完成。",
+          ok: false,
+        };
+      }
+      this.isProcessing = true;
+      try {
+        await this.processDocumentTargets(targets, command.commandId, command.mode);
+        console.log("[image-quickedit] workflow-step: task completed successfully");
+        return { ok: true, alreadyNotified: true };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error("[image-quickedit] workflow-step: task failed", message);
+        return { ok: false, errorCode: "execution-failed", message };
+      } finally {
+        this.isProcessing = false;
+      }
     }
 
     return this.startPowerButtonsTask(async () => this.processDocumentTargets(targets, command.commandId, command.mode));
@@ -1057,6 +1094,7 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
   private startPowerButtonsTask(task: () => Promise<void>): PowerButtonsInvokeResult {
     const started = this.runExclusive(task);
     if (!started) {
+      console.warn("[image-quickedit] startPowerButtonsTask: mutex locked, returning provider-unavailable");
       return {
         alreadyNotified: true,
         errorCode: "provider-unavailable",
@@ -1065,6 +1103,7 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
       };
     }
 
+    console.log("[image-quickedit] startPowerButtonsTask: task launched successfully");
     return {
       alreadyNotified: true,
       ok: true,

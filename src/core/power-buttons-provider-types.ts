@@ -5,6 +5,10 @@ export interface PowerButtonsInvokeContext {
   surface?: string;
   buttonId?: string;
   docId?: string;
+  scope?: 'full-doc' | 'selection' | 'related-docs';
+  selectionBlockIds?: string[];
+  workflowId?: string;
+  stepIndex?: number;
 }
 
 type PowerButtonsInvokeErrorCode =
@@ -34,11 +38,12 @@ export interface PowerButtonsPublicCommand {
   category?: string;
   desktopOnly?: boolean;
   supportsTargetDoc?: boolean;
+  supportsSelection?: boolean;
 }
 
 export interface PowerButtonsCommandProvider {
   protocol: 'power-buttons-command-provider';
-  protocolVersion: 1;
+  protocolVersion: 2;
   providerId: string;
   providerName: string;
   providerVersion?: string;
