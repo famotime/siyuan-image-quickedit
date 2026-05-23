@@ -13,11 +13,12 @@ test("buildImageInfoLine matches the PRD info format", () => {
   const line = buildImageInfoLine({
     bytes: 235653,
     colorDepth: 24,
+    format: "png",
     height: 572,
     width: 1024,
   });
 
-  expect(line).toBe("230.13 KB，1024×572×24 (1.79)");
+  expect(line).toBe("PNG，230.13 KB，1024×572×24 (1.79)");
 });
 
 test("buildDocumentEmbeddedAssetInfoLine formats the current document embedded asset total", () => {
@@ -30,13 +31,14 @@ test("buildImageInfoLabel appends the current document embedded asset total on a
     imageInfo: {
       bytes: 235653,
       colorDepth: 24,
+      format: "jpeg",
       height: 572,
       width: 1024,
     },
   });
 
   expect(label).toBe([
-    "230.13 KB，1024×572×24 (1.79)",
+    "JPEG，230.13 KB，1024×572×24 (1.79)",
     "当前文档内嵌资源总大小：1.50 MB",
   ].join("\n"));
 });

@@ -1,6 +1,7 @@
 interface ImageInfo {
   bytes: number;
   colorDepth?: number;
+  format?: string;
   height: number;
   width: number;
 }
@@ -68,8 +69,11 @@ function buildStorageSummary(originalBytes: number, outputBytes: number): string
 
 export function buildImageInfoLine(imageInfo: ImageInfo): string {
   const colorDepth = imageInfo.colorDepth ?? 24;
+  const format = imageInfo.format?.toUpperCase();
 
-  return `${formatBytes(imageInfo.bytes)}，${imageInfo.width}×${imageInfo.height}×${colorDepth} (${formatAspectRatio(imageInfo.width, imageInfo.height)})`;
+  const info = `${formatBytes(imageInfo.bytes)}，${imageInfo.width}×${imageInfo.height}×${colorDepth} (${formatAspectRatio(imageInfo.width, imageInfo.height)})`;
+
+  return format ? `${format}，${info}` : info;
 }
 
 export function buildDocumentEmbeddedAssetInfoLine(bytes: number): string {
