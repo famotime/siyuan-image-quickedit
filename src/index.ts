@@ -27,7 +27,7 @@ import {
   getEnabledDocumentBatchCommandIds,
   mergeSettings,
 } from "@/core/command-settings.ts";
-import { buildBatchResultMessage } from "@/core/formatters.ts";
+import { buildBatchResultMessage, formatBytes } from "@/core/formatters.ts";
 import {
   buildDocumentBatchSubmenuItems,
   buildImageQuickEditSubmenuItems,
@@ -709,7 +709,12 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
     targets: ImageTarget[],
     commandId: DocumentBatchCommandId,
     mode: DocumentBatchMode,
-  ): Promise<void> {
+  ): Promise<{
+    processedCount: number
+    successCount: number
+    failureCount: number
+    savedBytes: number
+  }> {
     const indexedTargets = targets.map((target, index) => ({
       ...target,
       executionId: `${target.blockId}-${index}`,
@@ -756,6 +761,13 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
       7000,
       result.failures.length ? "error" : "info",
     );
+
+    return {
+      processedCount: targets.length,
+      successCount: result.successes.length,
+      failureCount: result.failures.length,
+      savedBytes,
+    };
   }
 
   private async processTarget(
@@ -1076,9 +1088,21 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
       }
       this.isProcessing = true;
       try {
-        await this.processDocumentTargets(targets, command.commandId, command.mode);
+        const batchResult = await this.processDocumentTargets(targets, command.commandId, command.mode);
         console.log("[image-quickedit] workflow-step: task completed successfully");
-        return { ok: true, alreadyNotified: true };
+        return {
+          ok: true,
+          alreadyNotified: true,
+          resultSummary: {
+            failureCount: batchResult.failureCount,
+            label: batchResult.failureCount > 0
+              ? `已处理 ${batchResult.processedCount} 张图片，成功 ${batchResult.successCount}，失败 ${batchResult.failureCount}；节省 ${formatBytes(batchResult.savedBytes)}`
+              : `已处理 ${batchResult.processedCount} 张图片，节省 ${formatBytes(batchResult.savedBytes)}`,
+            processedCount: batchResult.processedCount,
+            savedBytes: batchResult.savedBytes,
+            successCount: batchResult.successCount,
+          },
+        };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         console.error("[image-quickedit] workflow-step: task failed", message);

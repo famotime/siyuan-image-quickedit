@@ -18,17 +18,29 @@ type PowerButtonsInvokeErrorCode =
   | 'not-supported'
   | 'execution-failed';
 
+export interface PowerButtonsResultSummary {
+  label?: string
+  processedCount?: number
+  successCount?: number
+  failureCount?: number
+  savedBytes?: number
+  originalBytes?: number
+  outputBytes?: number
+}
+
 export type PowerButtonsInvokeResult =
   | {
       ok: true;
       message?: string;
       alreadyNotified?: boolean;
+      resultSummary?: PowerButtonsResultSummary;
     }
   | {
       ok: false;
       message?: string;
       alreadyNotified?: boolean;
       errorCode: PowerButtonsInvokeErrorCode;
+      resultSummary?: PowerButtonsResultSummary;
     };
 
 export interface PowerButtonsPublicCommand {
