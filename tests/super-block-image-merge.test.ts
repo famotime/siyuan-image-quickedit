@@ -143,3 +143,47 @@ test("addBorderToBitmap expands image size and uses the configured border color"
   expect(drawImage).toHaveBeenCalledWith(bitmap, 3, 3, 80, 60);
   expect(result.blob.type).toBe("image/webp");
 });
+
+test("mergeBitmapsHorizontallyTopAligned crops images to minimum height when cropToSameHeight is true", async () => {
+  const firstBitmap = { height: 40, width: 120 } as ImageBitmap;
+  const secondBitmap = { height: 60, width: 80 } as ImageBitmap;
+  const drawImage = vi.fn();
+  const fillRect = vi.fn();
+  const toBlob = vi.fn((callback: BlobCallback) => callback(new Blob(["merged"], { type: "image/webp" })));
+  const context = {
+    drawImage,
+    fillRect,
+    fillStyle: "",
+  };
+  const getContext = vi.fn(() => context);
+  const originalCreateElement = document.createElement.bind(document);
+
+  vi.spyOn(document, "createElement").mockImplementation(((tagName: string) => {
+    if (tagName === "canvas") {
+      return {
+        height: 0,
+        width: 0,
+        getContext,
+        toBlob,
+      } as unknown as HTMLCanvasElement;
+    }
+
+    return originalCreateElement(tagName);
+  }) as typeof document.createElement);
+
+  const result = await mergeBitmapsHorizontallyTopAligned([firstBitmap, secondBitmap], {
+    borderColor: "#ff6600",
+    borderWidthPx: 2,
+    gapPx: 6,
+    cropToSameHeight: true,
+  });
+
+  expect(result.width).toBe(214);
+  expect(result.height).toBe(44);
+  expect(context.fillStyle).toBe("#ff6600");
+  expect(fillRect).toHaveBeenNthCalledWith(1, 0, 0, 124, 44);
+  expect(fillRect).toHaveBeenNthCalledWith(2, 130, 0, 84, 44);
+  expect(drawImage).toHaveBeenNthCalledWith(1, firstBitmap, 0, 0, 120, 40, 2, 2, 120, 40);
+  expect(drawImage).toHaveBeenNthCalledWith(2, secondBitmap, 0, 10, 80, 40, 132, 2, 80, 40);
+  expect(result.blob.type).toBe("image/webp");
+});

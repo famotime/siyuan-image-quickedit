@@ -271,12 +271,15 @@ test("createSuperBlockMergeOptionsGroup persists gap, border width, and border c
   const gapInput = inputs.find(input => input.type === "number" && input.value === "0") as HTMLInputElement;
   const colorInput = inputs.find(input => input.type === "color") as HTMLInputElement;
   const borderWidthInput = inputs.find(input => input !== gapInput && input.type === "number") as HTMLInputElement;
+  const cropCheckbox = inputs.find(input => input.type === "checkbox") as HTMLInputElement;
 
   expect(gapInput).toBeTruthy();
   expect(borderWidthInput).toBeTruthy();
   expect(colorInput).toBeTruthy();
+  expect(cropCheckbox).toBeTruthy();
   expect(borderWidthInput.value).toBe("2");
   expect(colorInput.value).toBe("#808080");
+  expect(cropCheckbox.checked).toBe(false);
 
   gapInput.value = "6";
   gapInput.dispatchEvent(new Event("change"));
@@ -284,17 +287,21 @@ test("createSuperBlockMergeOptionsGroup persists gap, border width, and border c
   borderWidthInput.dispatchEvent(new Event("change"));
   colorInput.value = "#00ff88";
   colorInput.dispatchEvent(new Event("change"));
+  cropCheckbox.checked = true;
+  cropCheckbox.dispatchEvent(new Event("change"));
 
   expect((plugin as any).settings.superBlockMergeOptions).toEqual({
     borderColor: "#00ff88",
     borderWidthPx: 2,
     gapPx: 6,
+    cropToSameHeight: true,
   });
   expect(saveData).toHaveBeenLastCalledWith("settings.json", expect.objectContaining({
     superBlockMergeOptions: {
       borderColor: "#00ff88",
       borderWidthPx: 2,
       gapPx: 6,
+      cropToSameHeight: true,
     },
   }));
 });
@@ -374,6 +381,7 @@ test("addBorderToImageTarget uploads bordered image and inserts it after the sel
       borderColor: "#00ff88",
       borderWidthPx: 2,
       gapPx: 6,
+      cropToSameHeight: false,
     },
   });
 

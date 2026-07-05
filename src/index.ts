@@ -325,6 +325,15 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
           });
         },
       }),
+      this.createSettingCheckboxOption({
+        checked: this.settings.superBlockMergeOptions.cropToSameHeight,
+        label: "裁剪一致高度（以最小高度为准）",
+        onChange: (checked) => {
+          this.persistSuperBlockMergeOptions({
+            cropToSameHeight: checked,
+          });
+        },
+      }),
     );
 
     return wrapper;

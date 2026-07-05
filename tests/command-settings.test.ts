@@ -50,6 +50,7 @@ test("mergeSettings fills missing menu toggles with defaults", () => {
     borderColor: "#ff0000",
     borderWidthPx: 2,
     gapPx: 12,
+    cropToSameHeight: false,
   });
 });
 
@@ -98,6 +99,7 @@ test("mergeSettings fills missing super block merge options with defaults", () =
     borderColor: "#808080",
     borderWidthPx: 2,
     gapPx: 8,
+    cropToSameHeight: false,
   });
 });
 

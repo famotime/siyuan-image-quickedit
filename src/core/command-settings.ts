@@ -31,6 +31,7 @@ export interface SuperBlockMergeOptions {
   gapPx: number;
   borderWidthPx: number;
   borderColor: string;
+  cropToSameHeight: boolean;
 }
 
 export interface PluginSettings {
@@ -72,6 +73,7 @@ export const DEFAULT_SUPER_BLOCK_MERGE_OPTIONS: SuperBlockMergeOptions = {
   gapPx: 0,
   borderWidthPx: 2,
   borderColor: "#808080",
+  cropToSameHeight: false,
 };
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -124,6 +126,7 @@ export function mergeSettings(settings?: LegacyPluginSettings | null): PluginSet
         superBlockMergeOptions?.borderColor,
         DEFAULT_SUPER_BLOCK_MERGE_OPTIONS.borderColor,
       ),
+      cropToSameHeight: superBlockMergeOptions?.cropToSameHeight ?? DEFAULT_SUPER_BLOCK_MERGE_OPTIONS.cropToSameHeight,
     },
   };
 }

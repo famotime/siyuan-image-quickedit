@@ -792,9 +792,17 @@ export async function mergeBitmapsHorizontallyTopAligned(
       + resolvedOptions.borderWidthPx * 2
       + (index > 0 ? resolvedOptions.gapPx : 0);
   }, 0);
-  const height = bitmaps.reduce((max, bitmap) => {
-    return Math.max(max, bitmap.height + resolvedOptions.borderWidthPx * 2);
-  }, 0);
+
+  const minHeight = bitmaps.length > 0
+    ? Math.min(...bitmaps.map(b => b.height))
+    : 0;
+
+  const height = resolvedOptions.cropToSameHeight
+    ? minHeight + resolvedOptions.borderWidthPx * 2
+    : bitmaps.reduce((max, bitmap) => {
+        return Math.max(max, bitmap.height + resolvedOptions.borderWidthPx * 2);
+      }, 0);
+
   const canvas = createCanvas(width, height);
   const context = canvas.getContext("2d");
   if (!context) {
@@ -804,20 +812,36 @@ export async function mergeBitmapsHorizontallyTopAligned(
   let offsetX = 0;
   for (const bitmap of bitmaps) {
     const outerWidth = bitmap.width + resolvedOptions.borderWidthPx * 2;
-    const outerHeight = bitmap.height + resolvedOptions.borderWidthPx * 2;
+    const outerHeight = resolvedOptions.cropToSameHeight
+      ? minHeight + resolvedOptions.borderWidthPx * 2
+      : bitmap.height + resolvedOptions.borderWidthPx * 2;
 
     if (resolvedOptions.borderWidthPx > 0) {
       context.fillStyle = resolvedOptions.borderColor;
       context.fillRect(offsetX, 0, outerWidth, outerHeight);
     }
 
-    context.drawImage(
-      bitmap,
-      offsetX + resolvedOptions.borderWidthPx,
-      resolvedOptions.borderWidthPx,
-      bitmap.width,
-      bitmap.height,
-    );
+    if (resolvedOptions.cropToSameHeight) {
+      context.drawImage(
+        bitmap,
+        0,
+        (bitmap.height - minHeight) / 2,
+        bitmap.width,
+        minHeight,
+        offsetX + resolvedOptions.borderWidthPx,
+        resolvedOptions.borderWidthPx,
+        bitmap.width,
+        minHeight,
+      );
+    } else {
+      context.drawImage(
+        bitmap,
+        offsetX + resolvedOptions.borderWidthPx,
+        resolvedOptions.borderWidthPx,
+        bitmap.width,
+        bitmap.height,
+      );
+    }
     offsetX += outerWidth + resolvedOptions.gapPx;
   }
 
