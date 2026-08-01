@@ -24,6 +24,12 @@ export interface ImageTarget {
   displayHeight: number;
   displayWidth: number;
   src: string;
+  targetWidth?: number;
+}
+
+export interface MergeBitmapInput {
+  bitmap: ImageBitmap;
+  targetWidth?: number;
 }
 
 export interface ImageMetadata {
@@ -644,6 +650,44 @@ async function compressToTargetRatio(
   return compressComprehensive(inspected, targetBytes, targetRatio, canvasCache, onProgress);
 }
 
+export function parseExplicitWidthPx(imageElement: HTMLElement): number | undefined {
+  const checkWidthString = (styleStr: string | null | undefined): number | undefined => {
+    if (!styleStr) return undefined;
+    const match = styleStr.match(/(?:^|;|\s)width\s*:\s*([\d.]+)px/i);
+    if (match) {
+      const val = parseFloat(match[1]);
+      if (!isNaN(val) && val > 0) {
+        return Math.round(val);
+      }
+    }
+    return undefined;
+  };
+
+  const imgStyleAttr = imageElement.getAttribute("style") || imageElement.style?.cssText;
+  const imgWidth = checkWidthString(imgStyleAttr);
+  if (imgWidth) return imgWidth;
+
+  const parent = imageElement.parentElement;
+  if (parent) {
+    const parentStyleAttr = parent.getAttribute("style") || parent.style?.cssText;
+    const parentWidth = checkWidthString(parentStyleAttr);
+    if (parentWidth) return parentWidth;
+  }
+
+  const imgSpan = imageElement.closest('span[data-type="img"]') || imageElement.closest(".img");
+  if (imgSpan) {
+    const innerSpans = Array.from(imgSpan.querySelectorAll("span[style]"));
+    for (const span of innerSpans) {
+      const w = checkWidthString(span.getAttribute("style") || (span as HTMLElement).style?.cssText);
+      if (w) return w;
+    }
+    const spanWidth = checkWidthString(imgSpan.getAttribute("style") || (imgSpan as HTMLElement).style?.cssText);
+    if (spanWidth) return spanWidth;
+  }
+
+  return undefined;
+}
+
 export function resolveImageTarget(element: HTMLElement): ImageTarget | null {
   const imageElement = getImageElement(element);
   if (!imageElement) {
@@ -657,6 +701,7 @@ export function resolveImageTarget(element: HTMLElement): ImageTarget | null {
   }
 
   const rect = imageElement.getBoundingClientRect();
+  const targetWidth = parseExplicitWidthPx(imageElement);
 
   return {
     alt: imageElement.getAttribute("alt") || "processed image",
@@ -664,6 +709,7 @@ export function resolveImageTarget(element: HTMLElement): ImageTarget | null {
     displayHeight: rect.height || imageElement.clientHeight || imageElement.naturalHeight || 0,
     displayWidth: rect.width || imageElement.clientWidth || imageElement.naturalWidth || 0,
     src: imageElement.dataset.src || imageElement.getAttribute("src") || imageElement.currentSrc || imageElement.src,
+    targetWidth,
   };
 }
 
@@ -779,28 +825,54 @@ export function collectSuperBlockImageTargets(superBlockElement: HTMLElement): I
 }
 
 export async function mergeBitmapsHorizontallyTopAligned(
-  bitmaps: ImageBitmap[],
+  bitmaps: (ImageBitmap | MergeBitmapInput)[],
   options: SuperBlockMergeOptions = DEFAULT_SUPER_BLOCK_MERGE_OPTIONS,
 ): Promise<{ blob: Blob; height: number; width: number }> {
   const resolvedOptions = {
     ...DEFAULT_SUPER_BLOCK_MERGE_OPTIONS,
     ...options,
   };
-  const width = bitmaps.reduce((total, bitmap, index) => {
+
+  const items = bitmaps.map((item) => {
+    if ("bitmap" in item && item.bitmap) {
+      const bitmap = item.bitmap;
+      const targetWidth = item.targetWidth;
+      const hasTargetWidth = Boolean(targetWidth && targetWidth > 0 && targetWidth !== bitmap.width);
+      const renderWidth = hasTargetWidth ? (targetWidth as number) : bitmap.width;
+      const renderHeight = hasTargetWidth
+        ? Math.round(bitmap.height * ((targetWidth as number) / bitmap.width))
+        : bitmap.height;
+
+      return {
+        bitmap,
+        renderHeight,
+        renderWidth,
+      };
+    }
+
+    const bitmap = item as ImageBitmap;
+    return {
+      bitmap,
+      renderHeight: bitmap.height,
+      renderWidth: bitmap.width,
+    };
+  });
+
+  const width = items.reduce((total, item, index) => {
     return total
-      + bitmap.width
+      + item.renderWidth
       + resolvedOptions.borderWidthPx * 2
       + (index > 0 ? resolvedOptions.gapPx : 0);
   }, 0);
 
-  const minHeight = bitmaps.length > 0
-    ? Math.min(...bitmaps.map(b => b.height))
+  const minHeight = items.length > 0
+    ? Math.min(...items.map(item => item.renderHeight))
     : 0;
 
   const height = resolvedOptions.cropToSameHeight
     ? minHeight + resolvedOptions.borderWidthPx * 2
-    : bitmaps.reduce((max, bitmap) => {
-        return Math.max(max, bitmap.height + resolvedOptions.borderWidthPx * 2);
+    : items.reduce((max, item) => {
+        return Math.max(max, item.renderHeight + resolvedOptions.borderWidthPx * 2);
       }, 0);
 
   const canvas = createCanvas(width, height);
@@ -810,11 +882,12 @@ export async function mergeBitmapsHorizontallyTopAligned(
   }
 
   let offsetX = 0;
-  for (const bitmap of bitmaps) {
-    const outerWidth = bitmap.width + resolvedOptions.borderWidthPx * 2;
+  for (const item of items) {
+    const { bitmap, renderHeight, renderWidth } = item;
+    const outerWidth = renderWidth + resolvedOptions.borderWidthPx * 2;
     const outerHeight = resolvedOptions.cropToSameHeight
       ? minHeight + resolvedOptions.borderWidthPx * 2
-      : bitmap.height + resolvedOptions.borderWidthPx * 2;
+      : renderHeight + resolvedOptions.borderWidthPx * 2;
 
     if (resolvedOptions.borderWidthPx > 0) {
       context.fillStyle = resolvedOptions.borderColor;
@@ -822,24 +895,29 @@ export async function mergeBitmapsHorizontallyTopAligned(
     }
 
     if (resolvedOptions.cropToSameHeight) {
+      const sourceCropHeight = Math.round(minHeight * (bitmap.height / renderHeight));
       context.drawImage(
         bitmap,
         0,
-        (bitmap.height - minHeight) / 2,
+        0,
         bitmap.width,
-        minHeight,
+        sourceCropHeight,
         offsetX + resolvedOptions.borderWidthPx,
         resolvedOptions.borderWidthPx,
-        bitmap.width,
+        renderWidth,
         minHeight,
       );
     } else {
       context.drawImage(
         bitmap,
-        offsetX + resolvedOptions.borderWidthPx,
-        resolvedOptions.borderWidthPx,
+        0,
+        0,
         bitmap.width,
         bitmap.height,
+        offsetX + resolvedOptions.borderWidthPx,
+        resolvedOptions.borderWidthPx,
+        renderWidth,
+        renderHeight,
       );
     }
     offsetX += outerWidth + resolvedOptions.gapPx;
@@ -867,15 +945,20 @@ export async function mergeSuperBlockImages(
     throw new Error("超级块中至少需要两张图片才能合并。");
   }
 
+  const items: MergeBitmapInput[] = [];
   const bitmaps: ImageBitmap[] = [];
   try {
     for (const target of targets) {
       const blob = await fetchImageBlob(target.src);
       const bitmap = await createImageBitmap(blob);
       bitmaps.push(bitmap);
+      items.push({
+        bitmap,
+        targetWidth: target.targetWidth,
+      });
     }
 
-    const merged = await mergeBitmapsHorizontallyTopAligned(bitmaps, options);
+    const merged = await mergeBitmapsHorizontallyTopAligned(items, options);
 
     return {
       fileName: `superblock-merge-${Date.now()}.webp`,
