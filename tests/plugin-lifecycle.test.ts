@@ -259,6 +259,59 @@ test("decorateDocumentMenu shows document add-border commands only after opt-in"
   }));
 });
 
+test("decorateDocumentMenu uses collectImageTargetsByDocId when clicked to fetch images in unrendered blocks", async () => {
+  const addItem = vi.fn();
+  const imageWorkflow = await import("../src/services/image-workflow.ts");
+  vi.spyOn(imageWorkflow, "collectImageTargetsByDocId").mockResolvedValue([
+    { alt: "p1", blockId: "block-1", displayHeight: 0, displayWidth: 0, src: "/assets/pic1.png" },
+    { alt: "p2", blockId: "block-3", displayHeight: 0, displayWidth: 0, src: "/assets/pic2.png" },
+  ]);
+
+  const { default: SiyuanImageQuickEditPlugin } = await import("../src/index.ts");
+  const plugin = new SiyuanImageQuickEditPlugin();
+  const processDocumentTargets = vi.spyOn(plugin as any, "processDocumentTargets").mockResolvedValue({
+    failureCount: 0,
+    processedCount: 2,
+    savedBytes: 100,
+    successCount: 2,
+  });
+
+  const emptyContentElement = document.createElement("div"); // DOM has 0 images due to lazy loading
+  const protyle = {
+    block: { rootID: "long-doc-unrendered-123" },
+    contentElement: emptyContentElement,
+    element: emptyContentElement,
+  };
+
+  (plugin as any).settings = mergeSettings({
+    documentReplaceMenuCommands: {
+      "compress-10": true,
+    },
+  });
+
+  (plugin as any).decorateDocumentMenu(protyle, { addItem }, { id: "long-doc-unrendered-123" } as any);
+
+  expect(addItem).toHaveBeenCalledWith(expect.objectContaining({
+    label: "图片快剪",
+  }));
+
+  const menuArg = addItem.mock.calls[0][0];
+  const compressCommand = menuArg.submenu.find((item: any) => item.label?.includes("10%") && item.label?.includes("替换"));
+  expect(compressCommand).toBeTruthy();
+
+  // Trigger the menu command click
+  await compressCommand.click();
+
+  expect(processDocumentTargets).toHaveBeenCalledWith(
+    expect.arrayContaining([
+      expect.objectContaining({ blockId: "block-1", src: "/assets/pic1.png" }),
+      expect.objectContaining({ blockId: "block-3", src: "/assets/pic2.png" }),
+    ]),
+    "compress-10",
+    "replace",
+  );
+});
+
 test("createSuperBlockMergeOptionsGroup persists gap, border width, and border color", async () => {
   const saveData = vi.fn().mockResolvedValue(undefined);
   const { default: SiyuanImageQuickEditPlugin } = await import("../src/index.ts");

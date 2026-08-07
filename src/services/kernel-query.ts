@@ -15,7 +15,7 @@ export async function getDocBlockMarkdowns(docId: string): Promise<DocBlockRow[]
     return [];
   }
 
-  const stmt = `select id, markdown from blocks where root_id = '${escapeSqlLiteral(normalizedDocId)}' and type != 'd' order by sort asc`;
+  const stmt = `select id, markdown from blocks where root_id = '${escapeSqlLiteral(normalizedDocId)}' and type not in ('d', 'c', 'm', 'html', 'av', 'query_embed', 'widget') order by sort asc`;
   console.log(`[image-quickedit] getDocBlockMarkdowns: executing SQL for docId=${normalizedDocId}`);
   const rows = await requestApi<DocBlockRow[]>('/api/query/sql', { stmt });
   console.log(`[image-quickedit] getDocBlockMarkdowns: returned ${rows.length} rows`);

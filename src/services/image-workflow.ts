@@ -630,24 +630,33 @@ async function compressToTargetRatio(
   const targetBytes = Math.max(1, Math.floor(inspected.original.bytes * targetRatio));
   const canvasCache = new Map<string, HTMLCanvasElement>();
 
-  if (strategy === "resolution-first") {
-    const fastResult = await compressResolutionFirst(inspected, targetBytes, targetRatio, canvasCache, onProgress);
-    if (fastResult) {
-      return candidateToOutput(fastResult);
+  try {
+    if (strategy === "resolution-first") {
+      const fastResult = await compressResolutionFirst(inspected, targetBytes, targetRatio, canvasCache, onProgress);
+      if (fastResult) {
+        return candidateToOutput(fastResult);
+      }
+
+      onProgress?.("分辨率优先未满足要求，尝试综合压缩…");
+    }
+    else if (strategy === "color-first") {
+      const fastResult = await compressColorFirst(inspected, targetBytes, targetRatio, canvasCache, onProgress);
+      if (fastResult) {
+        return candidateToOutput(fastResult);
+      }
+
+      onProgress?.("颜色优先未满足要求，尝试综合压缩…");
     }
 
-    onProgress?.("分辨率优先未满足要求，尝试综合压缩…");
+    return await compressComprehensive(inspected, targetBytes, targetRatio, canvasCache, onProgress);
   }
-  else if (strategy === "color-first") {
-    const fastResult = await compressColorFirst(inspected, targetBytes, targetRatio, canvasCache, onProgress);
-    if (fastResult) {
-      return candidateToOutput(fastResult);
+  finally {
+    for (const canvas of canvasCache.values()) {
+      canvas.width = 0;
+      canvas.height = 0;
     }
-
-    onProgress?.("颜色优先未满足要求，尝试综合压缩…");
+    canvasCache.clear();
   }
-
-  return compressComprehensive(inspected, targetBytes, targetRatio, canvasCache, onProgress);
 }
 
 export function parseExplicitWidthPx(imageElement: HTMLElement): number | undefined {
@@ -688,6 +697,24 @@ export function parseExplicitWidthPx(imageElement: HTMLElement): number | undefi
   return undefined;
 }
 
+export function isProcessableImageSource(src: string): boolean {
+  if (!src || typeof src !== "string") {
+    return false;
+  }
+
+  const trimmed = src.trim();
+  if (!trimmed || trimmed.startsWith("data:")) {
+    return false;
+  }
+
+  const cleanUrl = trimmed.split("?")[0].split("#")[0].toLowerCase();
+  if (cleanUrl.endsWith(".svg")) {
+    return false;
+  }
+
+  return true;
+}
+
 export function resolveImageTarget(element: HTMLElement): ImageTarget | null {
   const imageElement = getImageElement(element);
   if (!imageElement) {
@@ -700,6 +727,11 @@ export function resolveImageTarget(element: HTMLElement): ImageTarget | null {
     return null;
   }
 
+  const src = imageElement.dataset.src || imageElement.getAttribute("src") || imageElement.currentSrc || imageElement.src;
+  if (!src || !isProcessableImageSource(src)) {
+    return null;
+  }
+
   const rect = imageElement.getBoundingClientRect();
   const targetWidth = parseExplicitWidthPx(imageElement);
 
@@ -708,7 +740,7 @@ export function resolveImageTarget(element: HTMLElement): ImageTarget | null {
     blockId,
     displayHeight: rect.height || imageElement.clientHeight || imageElement.naturalHeight || 0,
     displayWidth: rect.width || imageElement.clientWidth || imageElement.naturalWidth || 0,
-    src: imageElement.dataset.src || imageElement.getAttribute("src") || imageElement.currentSrc || imageElement.src,
+    src,
     targetWidth,
   };
 }
@@ -753,15 +785,18 @@ function extractImageSrcsFromMarkdown(markdown: string): string[] {
     match = mdRegex.exec(markdown);
   }
 
-  if (sources.length > 0) {
-    return sources;
-  }
-
   const htmlRegex = /<img\b[^>]*?\ssrc=["']([^"']+)["'][^>]*>/gi;
   match = htmlRegex.exec(markdown);
   while (match) {
     sources.push(match[1]);
     match = htmlRegex.exec(markdown);
+  }
+
+  const dataSrcRegex = /\bdata-src=["']([^"']+)["']/gi;
+  match = dataSrcRegex.exec(markdown);
+  while (match) {
+    sources.push(match[1]);
+    match = dataSrcRegex.exec(markdown);
   }
 
   return sources;
@@ -775,7 +810,6 @@ export async function collectImageTargetsByDocId(docId: string): Promise<ImageTa
 
   let blocksWithMarkdown = 0;
   let totalSrcs = 0;
-  let nonAssetSrcs = 0;
 
   for (const block of blocks) {
     if (!block.markdown) continue;
@@ -783,12 +817,14 @@ export async function collectImageTargetsByDocId(docId: string): Promise<ImageTa
     const srcs = extractImageSrcsFromMarkdown(block.markdown);
     totalSrcs += srcs.length;
     for (const src of srcs) {
-      const normalizedSrc = src.startsWith("/") ? src : `/${src}`;
-      if (!normalizedSrc.startsWith("/assets/")) {
-        nonAssetSrcs++;
-        console.log(`[image-quickedit] skipping non-asset src: ${src}`);
+      let rawSrc = src.trim();
+      if (rawSrc.startsWith("<") && rawSrc.endsWith(">")) {
+        rawSrc = rawSrc.slice(1, -1).trim();
+      }
+      if (!rawSrc || !isProcessableImageSource(rawSrc)) {
         continue;
       }
+      const normalizedSrc = rawSrc.startsWith("assets/") ? `/${rawSrc}` : rawSrc;
       const key = `${block.id}|${normalizedSrc}`;
       if (seen.has(key)) continue;
       seen.add(key);
@@ -802,7 +838,7 @@ export async function collectImageTargetsByDocId(docId: string): Promise<ImageTa
     }
   }
 
-  console.log(`[image-quickedit] collectImageTargetsByDocId result: blocksWithMarkdown=${blocksWithMarkdown}, totalSrcs=${totalSrcs}, nonAssetSrcs=${nonAssetSrcs}, targets=${targets.length}`);
+  console.log(`[image-quickedit] collectImageTargetsByDocId result: blocksWithMarkdown=${blocksWithMarkdown}, totalSrcs=${totalSrcs}, targets=${targets.length}`);
   return targets;
 }
 

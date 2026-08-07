@@ -1,6 +1,20 @@
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 
-import { buildCompressionScaleSteps } from "../src/services/image-workflow.ts";
+import { buildCompressionScaleSteps, collectImageTargetsByDocId } from "../src/services/image-workflow.ts";
+
+vi.mock("../src/services/kernel-query.ts", () => ({
+  getDocBlockMarkdowns: vi.fn(async (docId: string) => {
+    if (docId === "long-doc-123") {
+      return [
+        { id: "block-1", markdown: "Header\n\n![img1](assets/pic1.png)" },
+        { id: "block-2", markdown: "Paragraph text without images" },
+        { id: "block-3", markdown: "HTML tag: <img src=\"/assets/pic2.png\"> and markdown: ![img3](https://example.com/pic3.jpg)" },
+        { id: "block-4", markdown: "Data URI: <img src=\"data:image/png;base64,12345\">" },
+      ];
+    }
+    return [];
+  }),
+}));
 
 test("buildCompressionScaleSteps tries original resolution before display-scale reductions", () => {
   expect(buildCompressionScaleSteps(0.5)).toEqual([
@@ -63,4 +77,14 @@ test("buildCompressionScaleSteps clamps base scale below natural scale when orig
   expect(steps[1]).toBeCloseTo(0.675, 5);
   expect(steps.length).toBe(9);
   expect(steps[steps.length - 1]).toBeCloseTo(0.15, 5);
+});
+
+test("collectImageTargetsByDocId extracts both markdown and HTML img tags across multiple document blocks", async () => {
+  const targets = await collectImageTargetsByDocId("long-doc-123");
+  expect(targets).toHaveLength(3);
+  expect(targets).toEqual(expect.arrayContaining([
+    expect.objectContaining({ blockId: "block-1", src: "/assets/pic1.png" }),
+    expect.objectContaining({ blockId: "block-3", src: "/assets/pic2.png" }),
+    expect.objectContaining({ blockId: "block-3", src: "https://example.com/pic3.jpg" }),
+  ]));
 });

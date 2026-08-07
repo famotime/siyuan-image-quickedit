@@ -102,7 +102,7 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
   };
 
   private readonly onEditorTitleIcon = (event: CustomEvent<IEventBusMap["click-editortitleicon"]>) => {
-    this.decorateDocumentMenu(event.detail.protyle, event.detail.menu);
+    this.decorateDocumentMenu(event.detail.protyle, event.detail.menu, event.detail.data);
   };
 
   public readonly version = PluginInfo.version;
@@ -544,15 +544,21 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
     }
   }
 
-  private decorateDocumentMenu(protyle: IProtyle, menu: IEventBusMap["click-editortitleicon"]["menu"]): void {
+  private decorateDocumentMenu(
+    protyle: IProtyle,
+    menu: IEventBusMap["click-editortitleicon"]["menu"],
+    data?: IGetDocInfo,
+  ): void {
     const enabledInsertCommands = getEnabledDocumentBatchCommandIds(this.settings.documentInsertMenuCommands);
     const enabledReplaceCommands = getEnabledDocumentBatchCommandIds(this.settings.documentReplaceMenuCommands);
     if (!enabledInsertCommands.length && !enabledReplaceCommands.length) {
       return;
     }
 
-    const targets = collectImageTargets(protyle);
-    if (!targets.length) {
+    const docId = data?.id || protyle?.block?.rootID || protyle?.options?.rootId || protyle?.block?.id;
+    const domTargets = collectImageTargets(protyle);
+
+    if (!docId && !domTargets.length) {
       return;
     }
 
@@ -563,20 +569,40 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
         insertCommandIds: enabledInsertCommands,
         replaceCommandIds: enabledReplaceCommands,
         onCommandClick: (commandId, mode) => {
-          const commandLabel = mode === "replace"
-            ? DOCUMENT_BATCH_COMMAND_DEFINITIONS[commandId].replaceBatchLabel
-            : DOCUMENT_BATCH_COMMAND_DEFINITIONS[commandId].insertBatchLabel;
-          const detail = mode === "replace"
-            ? "原图将被直接替换，正文文本保持不变。"
-            : "原图不会删除，处理结果会插入到对应图片块后方。";
+          void (async () => {
+            let targets: ImageTarget[] = [];
+            if (docId) {
+              try {
+                targets = await collectImageTargetsByDocId(docId);
+              }
+              catch (error) {
+                console.error("[image-quickedit] Failed to collect image targets by docId", error);
+              }
+            }
+            if (!targets.length && protyle) {
+              targets = collectImageTargets(protyle);
+            }
 
-          confirm(
-            "图片快剪",
-            `将对本文档中的 ${targets.length} 张图片执行“${commandLabel}”。${detail}`,
-            () => {
-              void this.runExclusive(async () => this.processDocumentTargets(targets, commandId, mode));
-            },
-          );
+            if (!targets.length) {
+              showMessage("本文档中没有可处理的图片。", 5000, "info");
+              return;
+            }
+
+            const commandLabel = mode === "replace"
+              ? DOCUMENT_BATCH_COMMAND_DEFINITIONS[commandId].replaceBatchLabel
+              : DOCUMENT_BATCH_COMMAND_DEFINITIONS[commandId].insertBatchLabel;
+            const detail = mode === "replace"
+              ? "原图将被直接替换，正文文本保持不变。"
+              : "原图不会删除，处理结果会插入到对应图片块后方。";
+
+            confirm(
+              "图片快剪",
+              `将对本文档中的 ${targets.length} 张图片执行“${commandLabel}”。${detail}`,
+              () => {
+                void this.runExclusive(async () => this.processDocumentTargets(targets, commandId, mode));
+              },
+            );
+          })();
         },
       }),
     });
@@ -853,7 +879,18 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
 
     this.reportProgress(`${progressLabel}：正在插入结果块`);
     const markdown = buildProcessedResultMarkdown(prepared, assetPath);
-    await insertMarkdownAfterBlock(target.blockId, markdown);
+    try {
+      await insertMarkdownAfterBlock(target.blockId, markdown);
+    }
+    catch (insertError) {
+      const block = await getBlockById(target.blockId);
+      if (block?.root_id && block.root_id !== target.blockId) {
+        await insertMarkdownAfterBlock(block.root_id, markdown);
+      }
+      else {
+        throw insertError;
+      }
+    }
 
     return {
       originalBytes: prepared.original.bytes,
@@ -1040,13 +1077,25 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
 
     console.log(`[image-quickedit] invokePowerButtonsCommand: commandId=${commandId}, docId=${context.docId || "(none)"}, trigger=${context.trigger}, scope=${context.scope || "(none)"}`);
 
-    const targets = context.docId
-      ? await collectImageTargetsByDocId(context.docId)
-      : (() => {
-          const protyle = this.resolvePowerButtonsProtyle();
-          return protyle ? collectImageTargets(protyle) : [];
-        })();
-    console.log(`[image-quickedit] collected ${targets.length} image targets for docId=${context.docId || "(current)"}`);
+    const protyle = this.resolvePowerButtonsProtyle();
+    const effectiveDocId = context.docId
+      || protyle?.block?.rootID
+      || protyle?.options?.rootId
+      || protyle?.block?.id;
+
+    let targets: ImageTarget[] = [];
+    if (effectiveDocId) {
+      try {
+        targets = await collectImageTargetsByDocId(effectiveDocId);
+      }
+      catch (error) {
+        console.error("[image-quickedit] Failed to collect targets by docId in power buttons", error);
+      }
+    }
+    if (!targets.length && protyle) {
+      targets = collectImageTargets(protyle);
+    }
+    console.log(`[image-quickedit] collected ${targets.length} image targets for docId=${effectiveDocId || "(current)"}`);
 
     if (!targets.length) {
       console.warn("[image-quickedit] no targets found, returning context-unavailable");

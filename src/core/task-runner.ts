@@ -31,6 +31,10 @@ export async function runTargetsSequentially<TResult>(
   const failures: TaskFailure[] = [];
 
   for (const [index, target] of options.targets.entries()) {
+    if (index > 0) {
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+
     options.onProgress?.(`[${index + 1}/${options.targets.length}] 正在处理${target.label}`);
 
     try {
