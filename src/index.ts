@@ -27,7 +27,7 @@ import {
   getEnabledDocumentBatchCommandIds,
   mergeSettings,
 } from "@/core/command-settings.ts";
-import { buildBatchResultMessage, formatBytes } from "@/core/formatters.ts";
+import { buildBatchResultMessage, buildDocumentImageSummaryLabel, formatBytes } from "@/core/formatters.ts";
 import {
   buildDocumentBatchSubmenuItems,
   buildImageQuickEditSubmenuItems,
@@ -75,6 +75,7 @@ import {
   resolveLocalEditorImageSource,
   resolveLocalEditorImagePath,
 } from "@/services/local-editor.ts";
+import { loadDocumentEmbeddedAssetBytes } from "@/services/document-asset-stats.ts";
 import { notifyImageInfo } from "@/services/image-info-notification.ts";
 import PluginInfo from "@/../plugin.json";
 
@@ -544,6 +545,45 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
     }
   }
 
+  private async hydrateDocumentImageSummary(
+    summaryElement: HTMLElement,
+    docId: string | undefined,
+    domTargets: ImageTarget[],
+  ): Promise<void> {
+    let targets = domTargets;
+
+    if (docId) {
+      try {
+        const docTargets = await collectImageTargetsByDocId(docId);
+        if (docTargets.length) {
+          targets = docTargets;
+        }
+      }
+      catch (error) {
+        console.error("[image-quickedit] Failed to collect image targets by docId", error);
+      }
+    }
+
+    let documentEmbeddedAssetBytes = 0;
+    if (docId) {
+      try {
+        documentEmbeddedAssetBytes = await loadDocumentEmbeddedAssetBytes(docId);
+      }
+      catch (error) {
+        console.error("[image-quickedit] Failed to load document asset stats", error);
+      }
+    }
+
+    const label = buildDocumentImageSummaryLabel({
+      documentEmbeddedAssetBytes,
+      imageCount: targets.length,
+    });
+    const labelElement = summaryElement.querySelector(".b3-menu__label");
+    if (labelElement) {
+      syncReadonlyMenuItemLabelElement(labelElement, label);
+    }
+  }
+
   private decorateDocumentMenu(
     protyle: IProtyle,
     menu: IEventBusMap["click-editortitleicon"]["menu"],
@@ -562,10 +602,18 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
       return;
     }
 
+    const summaryLabel = buildDocumentImageSummaryLabel({
+      imageCount: domTargets.length,
+    });
+
     menu.addItem({
       icon: "iconImage",
       label: "图片快剪",
       submenu: buildDocumentBatchSubmenuItems({
+      imageSummaryLabel: summaryLabel,
+      onBindImageSummaryLabel: (element) => {
+        return this.hydrateDocumentImageSummary(element, docId, domTargets);
+      },
         insertCommandIds: enabledInsertCommands,
         replaceCommandIds: enabledReplaceCommands,
         onCommandClick: (commandId, mode) => {

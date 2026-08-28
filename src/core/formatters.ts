@@ -95,6 +95,18 @@ export function buildImageInfoLabel(input: {
   ].join("\n");
 }
 
+export function buildDocumentImageSummaryLabel(input: {
+  documentEmbeddedAssetBytes?: number;
+  imageCount: number;
+}): string {
+  return [
+    `当前文档共 ${input.imageCount} 张图片`,
+    typeof input.documentEmbeddedAssetBytes === "number"
+      ? buildDocumentEmbeddedAssetInfoLine(input.documentEmbeddedAssetBytes)
+      : "当前文档内嵌资源总大小：读取中…",
+  ].join("\n");
+}
+
 export function buildResultMarkdown(input: ResultMarkdownInput): string {
   const summary = `${input.commandLabel}完成：压缩后图片分辨率${formatResolution(input.output.width, input.output.height)}，${buildDimensionSummary(input.original, input.output)}；大小${formatBytes(input.output.bytes)}，${buildStorageSummary(input.original.bytes, input.output.bytes)}，输出格式 ${input.output.format.toUpperCase()}。`;
 

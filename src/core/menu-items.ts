@@ -21,6 +21,8 @@ interface BuildImageQuickEditSubmenuItemsOptions {
 }
 
 interface BuildDocumentBatchSubmenuItemsOptions {
+  imageSummaryLabel?: string;
+  onBindImageSummaryLabel?: (element: HTMLElement) => void;
   insertCommandIds: DocumentBatchCommandId[];
   onCommandClick: (commandId: DocumentBatchCommandId, mode: DocumentBatchMode) => void;
   replaceCommandIds: DocumentBatchCommandId[];
@@ -83,12 +85,27 @@ export function syncReadonlyMenuItemLabelElement(labelElement: Element, label: s
 export function buildDocumentBatchSubmenuItems(
   options: BuildDocumentBatchSubmenuItemsOptions,
 ): IMenu[] {
-  const items: IMenu[] = [
-    ...options.insertCommandIds.map(commandId => ({
-      click: () => options.onCommandClick(commandId, "insert"),
-      label: DOCUMENT_BATCH_COMMAND_DEFINITIONS[commandId].insertBatchLabel,
-    })),
-  ];
+  const items: IMenu[] = [];
+
+  if (options.imageSummaryLabel) {
+    const summaryItem: IMenu = {
+      label: options.imageSummaryLabel,
+      type: "readonly",
+    };
+    if (options.onBindImageSummaryLabel) {
+      summaryItem.bind = (element) => {
+        return options.onBindImageSummaryLabel?.(element as HTMLElement) as unknown as void;
+      };
+    }
+    items.push(summaryItem, {
+      type: "separator",
+    });
+  }
+
+  items.push(...options.insertCommandIds.map(commandId => ({
+    click: () => options.onCommandClick(commandId, "insert"),
+    label: DOCUMENT_BATCH_COMMAND_DEFINITIONS[commandId].insertBatchLabel,
+  })));
 
   if (options.insertCommandIds.length && options.replaceCommandIds.length) {
     items.push({

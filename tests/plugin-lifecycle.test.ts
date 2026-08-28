@@ -312,6 +312,54 @@ test("decorateDocumentMenu uses collectImageTargetsByDocId when clicked to fetch
   );
 });
 
+test("decorateDocumentMenu prepends document image summary and hydrates it with docId targets and asset stats", async () => {
+  const addItem = vi.fn();
+  const imageWorkflow = await import("../src/services/image-workflow.ts");
+  const documentAssetStats = await import("../src/services/document-asset-stats.ts");
+
+  vi.spyOn(imageWorkflow, "collectImageTargetsByDocId").mockResolvedValue([
+    { alt: "p1", blockId: "block-1", displayHeight: 0, displayWidth: 0, src: "/assets/pic1.png" },
+    { alt: "p2", blockId: "block-3", displayHeight: 0, displayWidth: 0, src: "/assets/pic2.png" },
+  ]);
+  vi.spyOn(documentAssetStats, "loadDocumentEmbeddedAssetBytes").mockResolvedValue(1234567);
+
+  const { default: SiyuanImageQuickEditPlugin } = await import("../src/index.ts");
+  const plugin = new SiyuanImageQuickEditPlugin();
+  const emptyContentElement = document.createElement("div");
+  const protyle = {
+    block: { rootID: "doc-123" },
+    contentElement: emptyContentElement,
+    element: emptyContentElement,
+  };
+
+  (plugin as any).settings = mergeSettings({
+    documentInsertMenuCommands: {
+      "convert-webp": true,
+    },
+    documentReplaceMenuCommands: {
+      "compress-10": true,
+    },
+  });
+
+  (plugin as any).decorateDocumentMenu(protyle, { addItem }, { id: "doc-123" } as any);
+
+  expect(addItem).toHaveBeenCalledTimes(1);
+  const menuArg = addItem.mock.calls[0][0];
+  const summaryItem = menuArg.submenu[0];
+  expect(summaryItem).toMatchObject({
+    label: "当前文档共 0 张图片\n当前文档内嵌资源总大小：读取中…",
+    type: "readonly",
+  });
+
+  const summaryElement = document.createElement("div");
+  summaryElement.innerHTML = "<span class=\"b3-menu__label\"></span>";
+  await summaryItem.bind(summaryElement);
+
+  const labelElement = summaryElement.querySelector(".b3-menu__label");
+  expect(labelElement?.textContent).toBe("当前文档共 2 张图片\n当前文档内嵌资源总大小：1.18 MB");
+  expect((labelElement as HTMLElement).style.whiteSpace).toBe("pre-line");
+});
+
 test("createSuperBlockMergeOptionsGroup persists gap, border width, and border color", async () => {
   const saveData = vi.fn().mockResolvedValue(undefined);
   const { default: SiyuanImageQuickEditPlugin } = await import("../src/index.ts");
