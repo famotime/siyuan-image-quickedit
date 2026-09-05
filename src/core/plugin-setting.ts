@@ -48,10 +48,10 @@ export function ensurePluginSetting<TSetting extends SettingLike>(
     title: "图片信息通知",
   });
   setting.addItem({
-    createActionElement: createImageMenuToggleGroup,
-    description: "控制图片右键菜单里展示哪些单图操作，以及是否显示超级块图片合并。",
+    createActionElement: createSuperBlockMergeOptionsGroup,
+    description: "仅影响超级块图片合并结果，可设置图片间距和每张图片的边框样式。",
     direction: "column",
-    title: "图片右键菜单",
+    title: "超级块图片合并",
   });
   setting.addItem({
     createActionElement: createCompressionStrategySelect,
@@ -60,10 +60,10 @@ export function ensurePluginSetting<TSetting extends SettingLike>(
     title: "压缩策略",
   });
   setting.addItem({
-    createActionElement: createSuperBlockMergeOptionsGroup,
-    description: "仅影响超级块图片合并结果，可设置图片间距和每张图片的边框样式。",
+    createActionElement: createImageMenuToggleGroup,
+    description: "控制图片右键菜单里展示哪些单图操作，以及是否显示超级块图片合并。",
     direction: "column",
-    title: "超级块图片合并",
+    title: "图片右键菜单",
   });
   setting.addItem({
     createActionElement: () => createCommandToggleGroup("documentInsertMenuCommands"),
