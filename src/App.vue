@@ -170,8 +170,7 @@ onMounted(() => {
 
 
 onMounted(() => {
-  window._sy_plugin_sample = {}
-  window._sy_plugin_sample.openSetting = openSetting
+  // App 组件挂载完成
 })
 </script>
 
