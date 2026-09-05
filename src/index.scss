@@ -680,44 +680,6 @@
     }
   }
 
-  // 调色板按钮（纯 Lucide 图标）
-  .image-quickedit-palette-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 24px;
-    height: 24px;
-    padding: 0;
-    border-radius: 4px;
-    border: 1px solid var(--b3-border-color);
-    background-color: var(--b3-theme-surface);
-    color: var(--b3-theme-on-surface-light);
-    cursor: pointer;
-    user-select: none;
-    transition: all 0.15s ease;
-    box-sizing: border-box;
-
-    svg {
-      width: 14px;
-      height: 14px;
-      display: block;
-      transition: transform 0.15s ease;
-    }
-
-    &:hover {
-      border-color: var(--b3-theme-primary);
-      color: var(--b3-theme-primary);
-      background-color: rgba(66, 133, 244, 0.08);
-
-      svg {
-        transform: scale(1.12);
-      }
-    }
-
-    &:active {
-      transform: scale(0.95);
-    }
-  }
 
   // 裁剪开关项
   .image-quickedit-crop-option {

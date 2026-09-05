@@ -203,15 +203,13 @@ test("createSettingColorPaletteRow allows selecting preset swatches, custom hex 
   const preview = row.querySelector(".image-quickedit-color-preview") as HTMLElement;
   const hexInput = row.querySelector(".image-quickedit-color-hex-input") as HTMLInputElement;
   const colorInput = row.querySelector(".image-quickedit-hidden-color-input") as HTMLInputElement;
-  const paletteBtn = row.querySelector(".image-quickedit-palette-btn") as HTMLButtonElement;
+  const paletteBtn = row.querySelector(".image-quickedit-palette-btn");
   const swatches = Array.from(row.querySelectorAll(".image-quickedit-color-swatch")) as HTMLElement[];
 
   expect(preview).toBeTruthy();
   expect(hexInput.value).toBe("#D5D5D8");
   expect(colorInput.value).toBe("#d5d5d8");
-  expect(paletteBtn).toBeTruthy();
-  expect(paletteBtn.querySelector("svg.lucide-palette")).toBeTruthy();
-  expect(paletteBtn.textContent?.trim()).toBe("");
+  expect(paletteBtn).toBeNull();
   expect(swatches.length).toBe(5);
 
   // 点击预设色块
@@ -227,13 +225,10 @@ test("createSettingColorPaletteRow allows selecting preset swatches, custom hex 
   expect(colorInput.value).toBe("#ff5500");
   expect(preview.style.backgroundColor).toBe("rgb(255, 85, 0)");
 
-  // 测试点击颜色预览圆环与调色板按钮唤起调色板
+  // 测试点击颜色预览圆环唤起调色板
   const clickSpy = vi.spyOn(colorInput, "click");
   preview.click();
   expect(clickSpy).toHaveBeenCalledTimes(1);
-
-  paletteBtn.click();
-  expect(clickSpy).toHaveBeenCalledTimes(2);
 });
 
 
