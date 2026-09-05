@@ -1,13 +1,422 @@
- .image-quickedit-setting-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+ // ==========================================
+// 思源图片快剪 - 插件设置页优雅舒适布局样式
+// ==========================================
+
+// 思源设置弹窗内条目容器：取消左右两列布局，转为标题居上、内容居下的上下换行结构
+.b3-dialog__content {
+  .config-item {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    padding: 14px 0 16px 0 !important;
+    border-bottom: 1px solid var(--b3-border-color);
+    box-sizing: border-box;
+
+    &:last-child {
+      border-bottom: none;
+    }
+
+    > .fn__block {
+      width: 100% !important;
+      display: flex !important;
+      flex-direction: column !important;
+    }
+
+    .config-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--b3-theme-on-background, var(--b3-theme-on-surface));
+      line-height: 1.4;
+      margin-bottom: 8px;
+    }
+
+    // 所有选项标题下无需显示说明文字
+    .b3-label__text {
+      display: none !important;
+    }
+
+    .fn__hr {
+      display: none !important;
+    }
+
+    > .fn__space {
+      display: none !important;
+    }
+
+    > .fn__flex-1 {
+      width: 100% !important;
+      max-width: 100% !important;
+      flex: none !important;
+      margin-bottom: 8px;
+    }
+
+    // 选项元素填满下方整行宽度
+    > .image-quickedit-setting-group,
+    > .image-quickedit-setting-path,
+    > .image-quickedit-param-panel,
+    > .image-quickedit-strategy-cards,
+    > .fn__flex-center.fn__size200,
+    .fn__block {
+      width: 100% !important;
+      max-width: 100% !important;
+      flex: none !important;
+      margin: 0 !important;
+    }
+
+    > .image-quickedit-switch-container {
+      margin-top: 2px;
+    }
+
+    // 包含快捷工具栏的选项（图片右键菜单、文档批量菜单）：标题与工具栏并列在同一行显示
+    > .fn__block:has(.image-quickedit-toolbar) {
+      display: grid !important;
+      grid-template-columns: 1fr auto !important;
+      row-gap: 8px !important;
+      align-items: center !important;
+      width: 100% !important;
+
+      > .config-name {
+        grid-column: 1 !important;
+        grid-row: 1 !important;
+        margin-bottom: 0 !important;
+        line-height: 24px !important;
+      }
+
+      > .image-quickedit-setting-group {
+        display: contents !important;
+      }
+
+      .image-quickedit-toolbar {
+        grid-column: 2 !important;
+        grid-row: 1 !important;
+        justify-self: end !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        line-height: 24px !important;
+      }
+
+      .image-quickedit-setting-grid,
+      .image-quickedit-batch-grid,
+      .image-quickedit-notification-row {
+        grid-column: 1 / -1 !important;
+        width: 100% !important;
+      }
+
+      @media (max-width: 520px) {
+        grid-template-columns: 1fr !important;
+
+        .image-quickedit-toolbar {
+          grid-column: 1 !important;
+          grid-row: auto !important;
+          justify-self: start !important;
+          margin-top: 4px !important;
+        }
+      }
+    }
+  }
 }
 
+// 通用容器
+.image-quickedit-setting-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+// 快捷操作工具条（全选 / 取消全选 / 恢复默认）
+.image-quickedit-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 2px 0 6px 0;
+
+  .image-quickedit-tool-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--b3-theme-on-surface-light);
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: all 0.15s ease;
+    user-select: none;
+
+    &:hover {
+      color: var(--b3-theme-primary);
+      background-color: var(--b3-theme-surface-lighter);
+    }
+
+    &:active {
+      transform: scale(0.96);
+    }
+  }
+}
+
+// 双列响应式选项网格
+.image-quickedit-setting-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
+
+  @media (max-width: 540px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+// 图片右键菜单选项内底部通知开关行
+.image-quickedit-notification-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding-top: 10px;
+  margin-top: 4px;
+  border-top: 1px dashed var(--b3-border-color);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+// 现代交互卡片选项
+.image-quickedit-setting-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  min-height: 38px;
+  border-radius: 6px;
+  border: 1px solid var(--b3-border-color);
+  background-color: var(--b3-theme-surface);
+  cursor: pointer;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+  user-select: none;
+
+  &:hover {
+    border-color: var(--b3-theme-primary);
+    background-color: var(--b3-theme-surface-lighter);
+  }
+
+  &.is-checked {
+    border-color: var(--b3-theme-primary);
+    background-color: rgba(66, 133, 244, 0.08);
+
+    .image-quickedit-card-title {
+      color: var(--b3-theme-on-surface);
+      font-weight: 500;
+    }
+  }
+
+  input[type="checkbox"] {
+    margin: 0;
+    cursor: pointer;
+    flex-shrink: 0;
+    accent-color: var(--b3-theme-primary);
+  }
+
+  .image-quickedit-card-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex: 1;
+    min-width: 0;
+    gap: 8px;
+  }
+
+  .image-quickedit-card-title {
+    font-size: 13px;
+    color: var(--b3-theme-on-surface);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: color 0.15s ease;
+  }
+}
+
+// 批量类型徽标（新增 / 替换）
+.image-quickedit-badge {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: normal;
+  flex-shrink: 0;
+  line-height: 1.4;
+
+  &.is-insert {
+    background-color: rgba(40, 167, 69, 0.12);
+    color: #28a745;
+  }
+
+  &.is-replace {
+    background-color: rgba(255, 140, 0, 0.12);
+    color: #ff8c00;
+  }
+}
+
+// 文档批量菜单合并展示网格与卡片
+.image-quickedit-batch-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
+
+  @media (max-width: 580px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.image-quickedit-batch-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  min-height: 42px;
+  border-radius: 6px;
+  border: 1px solid var(--b3-border-color);
+  background-color: var(--b3-theme-surface);
+  box-sizing: border-box;
+  transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+
+  &:hover {
+    border-color: var(--b3-theme-primary);
+    background-color: var(--b3-theme-surface-lighter);
+  }
+}
+
+.image-quickedit-batch-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--b3-theme-on-surface);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+.image-quickedit-batch-toggles {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.image-quickedit-sub-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--b3-theme-on-surface-light);
+  border: 1px solid var(--b3-border-color);
+  background-color: var(--b3-theme-background);
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s ease;
+
+  input[type="checkbox"] {
+    margin: 0;
+    cursor: pointer;
+    width: 13px;
+    height: 13px;
+  }
+
+  &:hover {
+    border-color: var(--b3-theme-primary);
+    color: var(--b3-theme-on-surface);
+  }
+
+  &.is-insert {
+    input[type="checkbox"] {
+      accent-color: #28a745;
+    }
+
+    &.is-checked {
+      border-color: rgba(40, 167, 69, 0.4);
+      background-color: rgba(40, 167, 69, 0.08);
+      color: #28a745;
+      font-weight: 500;
+    }
+  }
+
+  &.is-replace {
+    input[type="checkbox"] {
+      accent-color: #ff8c00;
+    }
+
+    &.is-checked {
+      border-color: rgba(255, 140, 0, 0.4);
+      background-color: rgba(255, 140, 0, 0.08);
+      color: #ff8c00;
+      font-weight: 500;
+    }
+  }
+}
+
+
+// 兼容旧类名
+.image-quickedit-setting-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+// 本地编辑器路径输入框与清除按钮
 .image-quickedit-setting-path {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
+  width: 100%;
+  box-sizing: border-box;
+
+  .image-quickedit-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+
+    input {
+      width: 100%;
+      padding-right: 32px;
+      font-family: var(--b3-font-family-code);
+      font-size: 12px;
+    }
+
+    .image-quickedit-input-clear {
+      position: absolute;
+      right: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--b3-theme-surface-lighter);
+      color: var(--b3-theme-on-surface-light);
+      border: none;
+      font-size: 11px;
+      line-height: 1;
+      cursor: pointer;
+      padding: 0;
+      transition: all 0.15s ease;
+
+      &:hover {
+        background: var(--b3-theme-primary);
+        color: #fff;
+      }
+    }
+  }
 }
 
 .image-quickedit-setting-hint {
@@ -16,14 +425,329 @@
   line-height: 1.5;
 }
 
-.image-quickedit-setting-option {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.image-quickedit-setting-field {
+// 压缩策略卡片组
+.image-quickedit-strategy-cards {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
+
+  .image-quickedit-strategy-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--b3-border-color);
+    background-color: var(--b3-theme-surface);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    user-select: none;
+
+    &:hover {
+      border-color: var(--b3-theme-primary);
+      background-color: var(--b3-theme-surface-lighter);
+    }
+
+    &.is-active {
+      border-color: var(--b3-theme-primary);
+      background-color: rgba(66, 133, 244, 0.07);
+      box-shadow: 0 0 0 1px var(--b3-theme-primary);
+
+      .image-quickedit-strategy-radio {
+        border-color: var(--b3-theme-primary);
+
+        &::after {
+          opacity: 1;
+          transform: scale(1);
+        }
+      }
+
+      .image-quickedit-strategy-name {
+        color: var(--b3-theme-primary);
+        font-weight: 600;
+      }
+    }
+
+    .image-quickedit-strategy-radio {
+      position: relative;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 2px solid var(--b3-border-color);
+      margin-top: 2px;
+      flex-shrink: 0;
+      transition: all 0.15s ease;
+
+      &::after {
+        content: "";
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background-color: var(--b3-theme-primary);
+        opacity: 0;
+        transform: scale(0.5);
+        transition: all 0.15s ease;
+      }
+    }
+
+    .image-quickedit-strategy-body {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      flex: 1;
+    }
+
+    .image-quickedit-strategy-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .image-quickedit-strategy-name {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--b3-theme-on-surface);
+      transition: color 0.15s ease;
+    }
+
+    .image-quickedit-strategy-tag {
+      font-size: 11px;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background-color: rgba(66, 133, 244, 0.12);
+      color: var(--b3-theme-primary);
+      font-weight: 500;
+    }
+
+    .image-quickedit-strategy-desc {
+      font-size: 12px;
+      color: var(--b3-theme-on-surface-light);
+      line-height: 1.4;
+    }
+  }
+}
+
+// 超级块合并参数控制面板
+.image-quickedit-param-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--b3-border-color);
+  background-color: transparent;
+  width: 100%;
+  box-sizing: border-box;
+
+  .image-quickedit-param-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+
+    @media (max-width: 520px) {
+      flex-direction: column;
+      align-items: stretch;
+    }
+  }
+
+  .image-quickedit-param-col {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    flex: 1;
+
+    .image-quickedit-param-label {
+      font-size: 12px;
+      color: var(--b3-theme-on-surface-light);
+    }
+
+    .image-quickedit-input-affix {
+      position: relative;
+      display: flex;
+      align-items: center;
+
+      input {
+        width: 100%;
+        padding-right: 30px;
+      }
+
+      .image-quickedit-affix-text {
+        position: absolute;
+        right: 10px;
+        font-size: 12px;
+        color: var(--b3-theme-on-surface-light);
+        pointer-events: none;
+      }
+    }
+  }
+
+  // 颜色选择组
+  .image-quickedit-color-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding-top: 8px;
+    border-top: 1px dashed var(--b3-border-color);
+
+    @media (max-width: 560px) {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 10px;
+    }
+  }
+
+  .image-quickedit-color-picker-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    .image-quickedit-color-preview {
+      position: relative;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      border: 1px solid var(--b3-border-color);
+      box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+
+      &:hover {
+        transform: scale(1.12);
+        box-shadow: 0 0 0 2px var(--b3-theme-primary);
+      }
+    }
+
+    .image-quickedit-hidden-color-input {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 0;
+      height: 0;
+      opacity: 0;
+      pointer-events: none;
+      border: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .image-quickedit-color-hex-input {
+      width: 82px;
+      height: 26px;
+      padding: 2px 6px;
+      font-family: var(--b3-font-family-code);
+      font-size: 12px;
+      text-transform: uppercase;
+      text-align: center;
+      box-sizing: border-box;
+    }
+  }
+
+  .image-quickedit-color-right-box {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    @media (max-width: 560px) {
+      justify-content: space-between;
+    }
+  }
+
+  .image-quickedit-color-swatches {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+
+    .image-quickedit-color-swatch {
+      width: 18px;
+      height: 18px;
+      border-radius: 4px;
+      border: 1px solid var(--b3-border-color);
+      cursor: pointer;
+      transition: transform 0.12s ease, box-shadow 0.12s ease;
+
+      &:hover {
+        transform: scale(1.18);
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+      }
+    }
+  }
+
+  // 调色板按钮（纯 Lucide 图标）
+  .image-quickedit-palette-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border-radius: 4px;
+    border: 1px solid var(--b3-border-color);
+    background-color: var(--b3-theme-surface);
+    color: var(--b3-theme-on-surface-light);
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.15s ease;
+    box-sizing: border-box;
+
+    svg {
+      width: 14px;
+      height: 14px;
+      display: block;
+      transition: transform 0.15s ease;
+    }
+
+    &:hover {
+      border-color: var(--b3-theme-primary);
+      color: var(--b3-theme-primary);
+      background-color: rgba(66, 133, 244, 0.08);
+
+      svg {
+        transform: scale(1.12);
+      }
+    }
+
+    &:active {
+      transform: scale(0.95);
+    }
+  }
+
+  // 裁剪开关项
+  .image-quickedit-crop-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding-top: 6px;
+    border-top: 1px dashed var(--b3-border-color);
+    cursor: pointer;
+    user-select: none;
+
+    .image-quickedit-crop-desc {
+      font-size: 12px;
+      color: var(--b3-theme-on-surface);
+    }
+  }
+}
+
+// 现代滑动 Switch 容器与文本
+.image-quickedit-switch-container {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+
+  .image-quickedit-switch-status {
+    font-size: 13px;
+    color: var(--b3-theme-on-surface);
+    white-space: nowrap;
+  }
 }

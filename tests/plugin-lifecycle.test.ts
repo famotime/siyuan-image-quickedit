@@ -173,7 +173,69 @@ test("createImageMenuToggleGroup includes add-border and super block merge toggl
     showAddImageBorderMenuItem: true,
     showSuperBlockMergeMenuItem: false,
   }));
+
+  // 验证合入的图片信息通知开关
+  const notificationRow = wrapper.querySelector(".image-quickedit-notification-row");
+  expect(notificationRow).toBeTruthy();
+  const notificationCheckbox = notificationRow?.querySelector("input") as HTMLInputElement;
+  expect(notificationCheckbox).toBeTruthy();
+  expect(notificationCheckbox.checked).toBe(false);
+
+  notificationCheckbox.checked = true;
+  notificationCheckbox.dispatchEvent(new Event("change"));
+  expect((plugin as any).settings.showImageInfoNotification).toBe(true);
+  expect(saveData).toHaveBeenLastCalledWith("settings.json", expect.objectContaining({
+    showImageInfoNotification: true,
+  }));
 });
+
+test("createSettingColorPaletteRow allows selecting preset swatches, custom hex input, and opening color palette via color preview", async () => {
+  const { default: SiyuanImageQuickEditPlugin } = await import("../src/index.ts");
+  const plugin = new SiyuanImageQuickEditPlugin();
+  const onChange = vi.fn();
+
+  const row = (plugin as any).createSettingColorPaletteRow({
+    initialValue: "#D5D5D8",
+    label: "边框颜色",
+    onChange,
+  });
+
+  const preview = row.querySelector(".image-quickedit-color-preview") as HTMLElement;
+  const hexInput = row.querySelector(".image-quickedit-color-hex-input") as HTMLInputElement;
+  const colorInput = row.querySelector(".image-quickedit-hidden-color-input") as HTMLInputElement;
+  const paletteBtn = row.querySelector(".image-quickedit-palette-btn") as HTMLButtonElement;
+  const swatches = Array.from(row.querySelectorAll(".image-quickedit-color-swatch")) as HTMLElement[];
+
+  expect(preview).toBeTruthy();
+  expect(hexInput.value).toBe("#D5D5D8");
+  expect(colorInput.value).toBe("#d5d5d8");
+  expect(paletteBtn).toBeTruthy();
+  expect(paletteBtn.querySelector("svg.lucide-palette")).toBeTruthy();
+  expect(paletteBtn.textContent?.trim()).toBe("");
+  expect(swatches.length).toBe(5);
+
+  // 点击预设色块
+  swatches[1]?.click(); // #4285f4
+  expect(onChange).toHaveBeenLastCalledWith("#4285f4");
+  expect(hexInput.value).toBe("#4285F4");
+  expect(colorInput.value).toBe("#4285f4");
+
+  // 直接编辑 HEX 代码
+  hexInput.value = "#ff5500";
+  hexInput.dispatchEvent(new Event("change"));
+  expect(onChange).toHaveBeenLastCalledWith("#ff5500");
+  expect(colorInput.value).toBe("#ff5500");
+  expect(preview.style.backgroundColor).toBe("rgb(255, 85, 0)");
+
+  // 测试点击颜色预览圆环与调色板按钮唤起调色板
+  const clickSpy = vi.spyOn(colorInput, "click");
+  preview.click();
+  expect(clickSpy).toHaveBeenCalledTimes(1);
+
+  paletteBtn.click();
+  expect(clickSpy).toHaveBeenCalledTimes(2);
+});
+
 
 test("document batch add-border toggles are hidden by default and can be enabled from settings", async () => {
   const saveData = vi.fn().mockResolvedValue(undefined);
@@ -210,6 +272,73 @@ test("document batch add-border toggles are hidden by default and can be enabled
     }),
   }));
 });
+
+test("createDocumentBatchMenuToggleGroup renders merged cards with insert and replace toggles and toolbar actions", async () => {
+  const saveData = vi.fn().mockResolvedValue(undefined);
+  const { default: SiyuanImageQuickEditPlugin } = await import("../src/index.ts");
+  const plugin = new SiyuanImageQuickEditPlugin();
+  (plugin as any).saveData = saveData;
+  (plugin as any).settings = mergeSettings();
+
+  const wrapper = (plugin as any).createDocumentBatchMenuToggleGroup();
+  const cards = Array.from(wrapper.querySelectorAll(".image-quickedit-batch-card")) as HTMLElement[];
+  expect(cards).toHaveLength(6);
+
+  // 验证每个卡片是否包含命令标题以及“新增”与“替换”两个复选框
+  const borderCard = cards.find(card => card.querySelector(".image-quickedit-batch-title")?.textContent?.includes("全部图片添加边框"));
+  expect(borderCard).toBeTruthy();
+
+  const insertCheckbox = borderCard?.querySelector('input[data-mode="insert"]') as HTMLInputElement;
+  const replaceCheckbox = borderCard?.querySelector('input[data-mode="replace"]') as HTMLInputElement;
+  expect(insertCheckbox).toBeTruthy();
+  expect(replaceCheckbox).toBeTruthy();
+  expect(insertCheckbox.checked).toBe(false);
+  expect(replaceCheckbox.checked).toBe(false);
+
+  // 触发勾选并测试保存
+  insertCheckbox.checked = true;
+  insertCheckbox.dispatchEvent(new Event("change"));
+  expect((plugin as any).settings.documentInsertMenuCommands["add-border"]).toBe(true);
+
+  replaceCheckbox.checked = true;
+  replaceCheckbox.dispatchEvent(new Event("change"));
+  expect((plugin as any).settings.documentReplaceMenuCommands["add-border"]).toBe(true);
+
+  // 测试快捷工具栏按钮
+  const buttons = Array.from(wrapper.querySelectorAll(".image-quickedit-tool-btn")) as HTMLButtonElement[];
+  const selectAllInsertBtn = buttons.find(b => b.textContent === "全选新增");
+  const unselectAllInsertBtn = buttons.find(b => b.textContent === "清空新增");
+  const selectAllReplaceBtn = buttons.find(b => b.textContent === "全选替换");
+  const unselectAllReplaceBtn = buttons.find(b => b.textContent === "清空替换");
+  const resetBtn = buttons.find(b => b.textContent === "恢复默认");
+
+  expect(selectAllInsertBtn).toBeTruthy();
+  expect(unselectAllInsertBtn).toBeTruthy();
+  expect(selectAllReplaceBtn).toBeTruthy();
+  expect(unselectAllReplaceBtn).toBeTruthy();
+  expect(resetBtn).toBeTruthy();
+
+  // 点击全选新增
+  selectAllInsertBtn?.click();
+  for (const card of cards) {
+    const cb = card.querySelector('input[data-mode="insert"]') as HTMLInputElement;
+    expect(cb.checked).toBe(true);
+  }
+
+  // 点击清空新增
+  unselectAllInsertBtn?.click();
+  for (const card of cards) {
+    const cb = card.querySelector('input[data-mode="insert"]') as HTMLInputElement;
+    expect(cb.checked).toBe(false);
+  }
+
+  // 点击恢复默认
+  resetBtn?.click();
+  const webpInsertCb = cards[0]?.querySelector('input[data-mode="insert"]') as HTMLInputElement;
+  expect(webpInsertCb.checked).toBe(true); // convert-webp 默认新增为 true
+  expect(insertCheckbox.checked).toBe(false); // add-border 默认新增为 false
+});
+
 
 test("decorateDocumentMenu shows document add-border commands only after opt-in", async () => {
   const addItem = vi.fn();
@@ -590,3 +719,101 @@ test("refreshEditedImages cache-busts rendered src without changing stable data-
   expect(imageElement.getAttribute("src")).toBe("assets/demo.png");
   expect(imageElement.dataset.src).toBe("assets/demo.png");
 });
+
+test("createCommandToggleGroup toolbar buttons support selectAll, unselectAll, and reset to defaults", async () => {
+  const saveData = vi.fn().mockResolvedValue(undefined);
+  const { default: SiyuanImageQuickEditPlugin } = await import("../src/index.ts");
+  const plugin = new SiyuanImageQuickEditPlugin();
+  (plugin as any).saveData = saveData;
+  (plugin as any).settings = mergeSettings();
+
+  const wrapper = (plugin as any).createCommandToggleGroup("documentInsertMenuCommands");
+  const toolBtns = Array.from(wrapper.querySelectorAll(".image-quickedit-tool-btn")) as HTMLButtonElement[];
+  const selectAllBtn = toolBtns.find(btn => btn.textContent === "全选");
+  const unselectAllBtn = toolBtns.find(btn => btn.textContent === "取消全选");
+  const resetBtn = toolBtns.find(btn => btn.textContent === "恢复默认");
+
+  expect(selectAllBtn).toBeTruthy();
+  expect(unselectAllBtn).toBeTruthy();
+  expect(resetBtn).toBeTruthy();
+
+  // 点击全选
+  selectAllBtn?.click();
+  const checkboxes = Array.from(wrapper.querySelectorAll<HTMLInputElement>("input[type='checkbox']"));
+  expect(checkboxes.every(cb => cb.checked)).toBe(true);
+
+  // 点击取消全选
+  unselectAllBtn?.click();
+  expect(checkboxes.every(cb => !cb.checked)).toBe(true);
+
+  // 点击恢复默认
+  resetBtn?.click();
+  const addBorderCheckbox = checkboxes[checkboxes.length - 1]; // add-border 默认在 insert 中是 false
+  expect(addBorderCheckbox?.checked).toBe(false);
+});
+
+test("createCompressionStrategySelect updates strategy when strategy card is clicked", async () => {
+  const saveData = vi.fn().mockResolvedValue(undefined);
+  const { default: SiyuanImageQuickEditPlugin } = await import("../src/index.ts");
+  const plugin = new SiyuanImageQuickEditPlugin();
+  (plugin as any).saveData = saveData;
+  (plugin as any).settings = mergeSettings();
+
+  const wrapper = (plugin as any).createCompressionStrategySelect();
+  const cards = Array.from(wrapper.querySelectorAll(".image-quickedit-strategy-card")) as HTMLElement[];
+  expect(cards).toHaveLength(3);
+
+  // 点击第 2 个卡片（优先压缩分辨率）
+  cards[1].click();
+  expect((plugin as any).settings.compressionStrategy).toBe("resolution-first");
+  expect(cards[1].classList.contains("is-active")).toBe(true);
+  expect(cards[0].classList.contains("is-active")).toBe(false);
+
+  // 点击第 3 个卡片（优先压缩颜色）
+  cards[2].click();
+  expect((plugin as any).settings.compressionStrategy).toBe("color-first");
+  expect(cards[2].classList.contains("is-active")).toBe(true);
+  expect(cards[1].classList.contains("is-active")).toBe(false);
+});
+
+test("createSuperBlockMergeOptionsGroup updates border color via preset swatches", async () => {
+  const saveData = vi.fn().mockResolvedValue(undefined);
+  const { default: SiyuanImageQuickEditPlugin } = await import("../src/index.ts");
+  const plugin = new SiyuanImageQuickEditPlugin();
+  (plugin as any).saveData = saveData;
+  (plugin as any).settings = mergeSettings();
+
+  const panel = (plugin as any).createSuperBlockMergeOptionsGroup();
+  const swatches = Array.from(panel.querySelectorAll(".image-quickedit-color-swatch")) as HTMLElement[];
+  expect(swatches.length).toBeGreaterThan(0);
+
+  // 点击黑色预设色块
+  const blackSwatch = swatches.find(s => s.title === "#000000");
+  expect(blackSwatch).toBeTruthy();
+  blackSwatch?.click();
+
+  expect((plugin as any).settings.superBlockMergeOptions.borderColor).toBe("#000000");
+});
+
+test("createLocalEditorPathInput clear button empties path and saves settings", async () => {
+  const saveData = vi.fn().mockResolvedValue(undefined);
+  const { default: SiyuanImageQuickEditPlugin } = await import("../src/index.ts");
+  const plugin = new SiyuanImageQuickEditPlugin();
+  (plugin as any).saveData = saveData;
+  (plugin as any).settings = mergeSettings({
+    localEditorPath: "C:\\Windows\\notepad.exe",
+  });
+
+  const wrapper = (plugin as any).createLocalEditorPathInput();
+  const input = wrapper.querySelector("input") as HTMLInputElement;
+  const clearBtn = wrapper.querySelector(".image-quickedit-input-clear") as HTMLButtonElement;
+
+  expect(input.value).toBe("C:\\Windows\\notepad.exe");
+  expect(clearBtn.style.display).not.toBe("none");
+
+  clearBtn.click();
+  expect(input.value).toBe("");
+  expect((plugin as any).settings.localEditorPath).toBe("");
+  expect(clearBtn.style.display).toBe("none");
+});
+

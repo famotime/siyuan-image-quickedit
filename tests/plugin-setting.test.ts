@@ -20,8 +20,7 @@ test("ensurePluginSetting creates and assigns the plugin setting once", () => {
     name: "siyuan-image-quickedit",
   };
   const createImageMenuToggleGroup = vi.fn(() => ({}) as HTMLElement);
-  const createCommandToggleGroup = vi.fn(() => ({}) as HTMLElement);
-  const createImageInfoNotificationToggle = vi.fn(() => ({}) as HTMLElement);
+  const createDocumentBatchMenuToggleGroup = vi.fn(() => ({}) as HTMLElement);
   const createLocalEditorPathInput = vi.fn(() => ({}) as HTMLElement);
   const createSuperBlockMergeOptionsGroup = vi.fn(() => ({}) as HTMLElement);
   const createCompressionStrategySelect = vi.fn(() => ({}) as HTMLElement);
@@ -30,8 +29,7 @@ test("ensurePluginSetting creates and assigns the plugin setting once", () => {
     host,
     MockSetting,
     createImageMenuToggleGroup,
-    createCommandToggleGroup,
-    createImageInfoNotificationToggle,
+    createDocumentBatchMenuToggleGroup,
     createLocalEditorPathInput,
     createSuperBlockMergeOptionsGroup,
     createCompressionStrategySelect,
@@ -40,8 +38,7 @@ test("ensurePluginSetting creates and assigns the plugin setting once", () => {
     host,
     MockSetting,
     createImageMenuToggleGroup,
-    createCommandToggleGroup,
-    createImageInfoNotificationToggle,
+    createDocumentBatchMenuToggleGroup,
     createLocalEditorPathInput,
     createSuperBlockMergeOptionsGroup,
     createCompressionStrategySelect,
@@ -49,20 +46,17 @@ test("ensurePluginSetting creates and assigns the plugin setting once", () => {
 
   expect(setting).toBe(host.setting);
   expect(reusedSetting).toBe(setting);
-  expect(setting.options.width).toBe("640px");
-  expect(setting.items).toHaveLength(7);
+  expect(setting.options.width).toBe("720px");
+  expect(setting.items).toHaveLength(5);
   expect(setting.items.map(item => item.title)).toEqual([
     "本地图片编辑",
-    "图片信息通知",
-    "图片右键菜单",
-    "压缩策略",
     "超级块图片合并",
-    "文档批量菜单（新增）",
-    "文档批量菜单（替换）",
+    "压缩策略",
+    "图片右键菜单",
+    "文档批量菜单",
   ]);
   expect(createImageMenuToggleGroup).not.toHaveBeenCalled();
-  expect(createCommandToggleGroup).not.toHaveBeenCalled();
-  expect(createImageInfoNotificationToggle).not.toHaveBeenCalled();
+  expect(createDocumentBatchMenuToggleGroup).not.toHaveBeenCalled();
   expect(createLocalEditorPathInput).not.toHaveBeenCalled();
   expect(createSuperBlockMergeOptionsGroup).not.toHaveBeenCalled();
   expect(createCompressionStrategySelect).not.toHaveBeenCalled();
