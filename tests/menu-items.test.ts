@@ -98,6 +98,48 @@ test("buildDocumentBatchSubmenuItems creates a flat document menu for insert and
   });
 });
 
+test("buildDocumentBatchSubmenuItems prepends readonly summary label, applies pre-line style, and calls bind callback", () => {
+  const bind = vi.fn();
+  const summaryLabel = [
+    "当前文档共 2 张图片",
+    "当前文档内嵌资源总大小：1.50 MB",
+  ].join("\n");
+  const items = buildDocumentBatchSubmenuItems({
+    imageSummaryLabel: summaryLabel,
+    onBindImageSummaryLabel: bind,
+    insertCommandIds: ["convert-webp"],
+    onCommandClick: () => undefined,
+    replaceCommandIds: ["compress-50"],
+  });
+
+  expect(items).toHaveLength(5);
+  expect(items[0]).toMatchObject({
+    label: summaryLabel,
+    type: "readonly",
+  });
+  expect(items[1]).toMatchObject({
+    type: "separator",
+  });
+  expect(items[2]).toMatchObject({
+    label: "全部转为 WebP 格式（新增）",
+  });
+  expect(items[3]).toMatchObject({
+    type: "separator",
+  });
+  expect(items[4]).toMatchObject({
+    label: "全部压缩到 50%（替换）",
+  });
+
+  const element = document.createElement("div");
+  const labelSpan = document.createElement("span");
+  labelSpan.className = "b3-menu__label";
+  element.appendChild(labelSpan);
+
+  items[0].bind?.(element);
+  expect(bind).toHaveBeenCalledWith(element);
+  expect(labelSpan.style.whiteSpace).toBe("pre-line");
+});
+
 test("buildSuperBlockMergeMenuItem creates the image merge command", () => {
   const onClick = vi.fn();
 

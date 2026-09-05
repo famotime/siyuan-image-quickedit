@@ -812,3 +812,145 @@ test("createLocalEditorPathInput clear button empties path and saves settings", 
   expect(clearBtn.style.display).toBe("none");
 });
 
+test("decorateDocumentMenu prepends document image summary and hydrates it with docId targets and asset stats", async () => {
+  const addItem = vi.fn();
+  const imageWorkflow = await import("../src/services/image-workflow.ts");
+  const documentAssetStats = await import("../src/services/document-asset-stats.ts");
+
+  vi.spyOn(imageWorkflow, "collectImageTargetsByDocId").mockResolvedValue([
+    { alt: "p1", blockId: "block-1", displayHeight: 0, displayWidth: 0, src: "/assets/pic1.png" },
+    { alt: "p2", blockId: "block-3", displayHeight: 0, displayWidth: 0, src: "/assets/pic2.png" },
+  ]);
+  vi.spyOn(documentAssetStats, "loadDocumentEmbeddedAssetBytes").mockResolvedValue(1234567);
+
+  const { default: SiyuanImageQuickEditPlugin } = await import("../src/index.ts");
+  const plugin = new SiyuanImageQuickEditPlugin();
+  const emptyContentElement = document.createElement("div");
+  const protyle = {
+    block: { rootID: "doc-123" },
+    contentElement: emptyContentElement,
+    element: emptyContentElement,
+  };
+
+  (plugin as any).settings = mergeSettings({
+    documentInsertMenuCommands: {
+      "convert-webp": true,
+    },
+    documentReplaceMenuCommands: {
+      "compress-10": true,
+    },
+  });
+
+  (plugin as any).decorateDocumentMenu(protyle, { addItem }, { id: "doc-123" } as any);
+
+  expect(addItem).toHaveBeenCalledTimes(1);
+  const menuArg = addItem.mock.calls[0][0];
+  const summaryItem = menuArg.submenu[0];
+  expect(summaryItem).toMatchObject({
+    label: "当前文档共 0 张图片\n当前文档内嵌资源总大小：读取中…",
+    type: "readonly",
+  });
+
+  const summaryElement = document.createElement("div");
+  summaryElement.innerHTML = "<span class=\"b3-menu__label\"></span>";
+  await summaryItem.bind(summaryElement);
+
+  const labelElement = summaryElement.querySelector(".b3-menu__label");
+  expect(labelElement?.textContent).toBe("当前文档共 2 张图片\n当前文档内嵌资源总大小：1.18 MB");
+  expect((labelElement as HTMLElement).style.whiteSpace).toBe("pre-line");
+});
+
+test("decorateDocumentMenu correctly displays 0 images when collectImageTargetsByDocId returns empty array", async () => {
+  const addItem = vi.fn();
+  const imageWorkflow = await import("../src/services/image-workflow.ts");
+  const documentAssetStats = await import("../src/services/document-asset-stats.ts");
+
+  vi.spyOn(imageWorkflow, "collectImageTargetsByDocId").mockResolvedValue([]);
+  vi.spyOn(documentAssetStats, "loadDocumentEmbeddedAssetBytes").mockResolvedValue(0);
+
+  const { default: SiyuanImageQuickEditPlugin } = await import("../src/index.ts");
+  const plugin = new SiyuanImageQuickEditPlugin();
+  const emptyContentElement = document.createElement("div");
+  const protyle = {
+    block: { rootID: "doc-empty" },
+    contentElement: emptyContentElement,
+    element: emptyContentElement,
+  };
+
+  (plugin as any).settings = mergeSettings({
+    documentInsertMenuCommands: {
+      "convert-webp": true,
+    },
+  });
+
+  (plugin as any).decorateDocumentMenu(protyle, { addItem }, { id: "doc-empty" } as any);
+
+  const menuArg = addItem.mock.calls[0][0];
+  const summaryItem = menuArg.submenu[0];
+  const summaryElement = document.createElement("div");
+  summaryElement.innerHTML = "<span class=\"b3-menu__label\"></span>";
+  await summaryItem.bind(summaryElement);
+
+  const labelElement = summaryElement.querySelector(".b3-menu__label");
+  expect(labelElement?.textContent).toBe("当前文档共 0 张图片\n当前文档内嵌资源总大小：0 B");
+});
+
+test("decorateDocumentMenu reuses collected targets when executing a command without duplicate collection", async () => {
+  const addItem = vi.fn();
+  const imageWorkflow = await import("../src/services/image-workflow.ts");
+  const documentAssetStats = await import("../src/services/document-asset-stats.ts");
+
+  const collectSpy = vi.spyOn(imageWorkflow, "collectImageTargetsByDocId").mockResolvedValue([
+    { alt: "p1", blockId: "block-1", displayHeight: 0, displayWidth: 0, src: "/assets/pic1.png" },
+  ]);
+  vi.spyOn(documentAssetStats, "loadDocumentEmbeddedAssetBytes").mockResolvedValue(5000);
+
+  const { default: SiyuanImageQuickEditPlugin } = await import("../src/index.ts");
+  const plugin = new SiyuanImageQuickEditPlugin();
+  const processDocumentTargets = vi.spyOn(plugin as any, "processDocumentTargets").mockResolvedValue({
+    failureCount: 0,
+    processedCount: 1,
+    savedBytes: 100,
+    successCount: 1,
+  });
+
+  const emptyContentElement = document.createElement("div");
+  const protyle = {
+    block: { rootID: "doc-reuse" },
+    contentElement: emptyContentElement,
+    element: emptyContentElement,
+  };
+
+  (plugin as any).settings = mergeSettings({
+    documentInsertMenuCommands: {
+      "convert-webp": true,
+    },
+  });
+
+  (plugin as any).decorateDocumentMenu(protyle, { addItem }, { id: "doc-reuse" } as any);
+
+  const menuArg = addItem.mock.calls[0][0];
+  const summaryItem = menuArg.submenu[0];
+  const summaryElement = document.createElement("div");
+  summaryElement.innerHTML = "<span class=\"b3-menu__label\"></span>";
+
+  // 1. 触发菜单绑定与水合
+  await summaryItem.bind(summaryElement);
+  expect(collectSpy).toHaveBeenCalledTimes(1);
+
+  // 2. 触发命令点击，验证不会重复触发 collectImageTargetsByDocId
+  const convertCommand = menuArg.submenu.find((item: any) => item.label?.includes("WebP"));
+  expect(convertCommand).toBeTruthy();
+  await convertCommand.click();
+
+  expect(collectSpy).toHaveBeenCalledTimes(1); // 依然为 1 次，复用了 targets
+  expect(processDocumentTargets).toHaveBeenCalledWith(
+    expect.arrayContaining([
+      expect.objectContaining({ blockId: "block-1", src: "/assets/pic1.png" }),
+    ]),
+    "convert-webp",
+    "insert",
+  );
+});
+
+

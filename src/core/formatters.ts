@@ -95,6 +95,23 @@ export function buildImageInfoLabel(input: {
   ].join("\n");
 }
 
+/**
+ * 构造文档批量菜单顶部的图片数量与资源大小只读汇总信息
+ */
+export function buildDocumentImageSummaryLabel(input: {
+  documentEmbeddedAssetBytes?: number;
+  imageCount?: number;
+}): string {
+  const countLine = typeof input.imageCount === "number"
+    ? `当前文档共 ${input.imageCount} 张图片`
+    : "当前文档图片数量：读取中…";
+  const assetLine = typeof input.documentEmbeddedAssetBytes === "number"
+    ? buildDocumentEmbeddedAssetInfoLine(input.documentEmbeddedAssetBytes)
+    : "当前文档内嵌资源总大小：读取中…";
+
+  return [countLine, assetLine].join("\n");
+}
+
 export function buildResultMarkdown(input: ResultMarkdownInput): string {
   const summary = `${input.commandLabel}完成：压缩后图片分辨率${formatResolution(input.output.width, input.output.height)}，${buildDimensionSummary(input.original, input.output)}；大小${formatBytes(input.output.bytes)}，${buildStorageSummary(input.original.bytes, input.output.bytes)}，输出格式 ${input.output.format.toUpperCase()}。`;
 

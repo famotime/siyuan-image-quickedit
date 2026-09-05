@@ -27,7 +27,11 @@ import {
   getEnabledDocumentBatchCommandIds,
   mergeSettings,
 } from "@/core/command-settings.ts";
-import { buildBatchResultMessage, formatBytes } from "@/core/formatters.ts";
+import {
+  buildBatchResultMessage,
+  buildDocumentImageSummaryLabel,
+  formatBytes,
+} from "@/core/formatters.ts";
 import {
   buildDocumentBatchSubmenuItems,
   buildImageQuickEditSubmenuItems,
@@ -75,6 +79,7 @@ import {
   resolveLocalEditorImageSource,
   resolveLocalEditorImagePath,
 } from "@/services/local-editor.ts";
+import { loadDocumentEmbeddedAssetBytes } from "@/services/document-asset-stats.ts";
 import { notifyImageInfo } from "@/services/image-info-notification.ts";
 import PluginInfo from "@/../plugin.json";
 
@@ -1135,6 +1140,49 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
     }
   }
 
+  private async hydrateDocumentImageSummary(
+    summaryElement: HTMLElement,
+    docId: string | undefined,
+    domTargets: ImageTarget[],
+    targetsPromise?: Promise<ImageTarget[]>,
+  ): Promise<void> {
+    // 1. 并行发起两路独立异步统计：获取图片目标与计算内嵌资源总大小
+    const fetchTargets = targetsPromise ?? (docId ? collectImageTargetsByDocId(docId) : Promise.resolve(domTargets));
+    const fetchAssetBytes = docId ? loadDocumentEmbeddedAssetBytes(docId) : Promise.resolve(0);
+
+    const [targetsResult, assetBytesResult] = await Promise.allSettled([
+      fetchTargets,
+      fetchAssetBytes,
+    ]);
+
+    // 2. 健壮容错与回退：只要全量扫描正常返回（即便为 0 张），均作为可信数据采用；仅在查询异常时降级回退
+    const targets = targetsResult.status === "fulfilled"
+      ? targetsResult.value
+      : domTargets;
+
+    if (targetsResult.status === "rejected") {
+      console.error("[image-quickedit] Failed to collect image targets by docId", targetsResult.reason);
+    }
+
+    const documentEmbeddedAssetBytes = assetBytesResult.status === "fulfilled"
+      ? assetBytesResult.value
+      : 0;
+
+    if (assetBytesResult.status === "rejected") {
+      console.error("[image-quickedit] Failed to load document asset stats", assetBytesResult.reason);
+    }
+
+    // 3. 构建多行文本并安全回写 DOM
+    const label = buildDocumentImageSummaryLabel({
+      documentEmbeddedAssetBytes,
+      imageCount: targets.length,
+    });
+    const labelElement = summaryElement.querySelector(".b3-menu__label");
+    if (labelElement) {
+      syncReadonlyMenuItemLabelElement(labelElement, label);
+    }
+  }
+
   private decorateDocumentMenu(
     protyle: IProtyle,
     menu: IEventBusMap["click-editortitleicon"]["menu"],
@@ -1153,23 +1201,56 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
       return;
     }
 
+    // 缓存或共享本次菜单打开周期的 targets Promise，供水合与后续点击复用，避免重复执行 SQL 及正文扫描
+    let cachedTargetsPromise: Promise<ImageTarget[]> | null = null;
+    let resolvedTargets: ImageTarget[] | null = null;
+
+    const getTargets = (): Promise<ImageTarget[]> => {
+      if (resolvedTargets) {
+        return Promise.resolve(resolvedTargets);
+      }
+      if (!cachedTargetsPromise) {
+        cachedTargetsPromise = (docId
+          ? collectImageTargetsByDocId(docId)
+              .then((targets) => {
+                resolvedTargets = targets;
+                return targets;
+              })
+              .catch((error) => {
+                console.error("[image-quickedit] Failed to collect image targets by docId", error);
+                resolvedTargets = domTargets;
+                return domTargets;
+              })
+          : Promise.resolve(domTargets)
+        );
+      }
+      return cachedTargetsPromise;
+    };
+
+    const summaryLabel = buildDocumentImageSummaryLabel({
+      imageCount: domTargets.length,
+    });
+
     menu.addItem({
       icon: "iconImage",
       label: "图片快剪",
       submenu: buildDocumentBatchSubmenuItems({
+        imageSummaryLabel: summaryLabel,
+        onBindImageSummaryLabel: (element) => {
+          return this.hydrateDocumentImageSummary(element, docId, domTargets, getTargets());
+        },
         insertCommandIds: enabledInsertCommands,
         replaceCommandIds: enabledReplaceCommands,
         onCommandClick: (commandId, mode) => {
-          void (async () => {
+          return (async () => {
             let targets: ImageTarget[] = [];
-            if (docId) {
-              try {
-                targets = await collectImageTargetsByDocId(docId);
-              }
-              catch (error) {
-                console.error("[image-quickedit] Failed to collect image targets by docId", error);
-              }
+            try {
+              targets = await getTargets();
             }
+            catch (error) {
+              console.error("[image-quickedit] Failed to collect image targets by docId", error);
+            }
+
             if (!targets.length && protyle) {
               targets = collectImageTargets(protyle);
             }

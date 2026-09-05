@@ -2,6 +2,7 @@ import { expect, test } from "vitest";
 
 import {
   buildDocumentEmbeddedAssetInfoLine,
+  buildDocumentImageSummaryLabel,
   buildImageInfoLabel,
   buildImageInfoLine,
   buildBatchResultMessage,
@@ -137,4 +138,38 @@ test("buildBatchResultMessage uses replacement copy for replace mode", () => {
   });
 
   expect(message).toBe("已处理本文档4个图片，总计减少存储空间256.00 KB，原图已直接替换，正文文本未改动，请审核。");
+});
+
+test("buildDocumentImageSummaryLabel joins image count and embedded asset size on separate lines", () => {
+  expect(buildDocumentImageSummaryLabel({
+    documentEmbeddedAssetBytes: 1_234_567,
+    imageCount: 2,
+  })).toBe([
+    "当前文档共 2 张图片",
+    "当前文档内嵌资源总大小：1.18 MB",
+  ].join("\n"));
+});
+
+test("buildDocumentImageSummaryLabel shows a loading hint before asset stats are available", () => {
+  expect(buildDocumentImageSummaryLabel({
+    imageCount: 2,
+  })).toBe([
+    "当前文档共 2 张图片",
+    "当前文档内嵌资源总大小：读取中…",
+  ].join("\n"));
+});
+
+test("buildDocumentImageSummaryLabel correctly formats zero image count and loading states", () => {
+  expect(buildDocumentImageSummaryLabel({
+    documentEmbeddedAssetBytes: 0,
+    imageCount: 0,
+  })).toBe([
+    "当前文档共 0 张图片",
+    "当前文档内嵌资源总大小：0 B",
+  ].join("\n"));
+
+  expect(buildDocumentImageSummaryLabel({})).toBe([
+    "当前文档图片数量：读取中…",
+    "当前文档内嵌资源总大小：读取中…",
+  ].join("\n"));
 });

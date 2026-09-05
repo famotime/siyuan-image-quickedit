@@ -21,8 +21,10 @@ interface BuildImageQuickEditSubmenuItemsOptions {
 }
 
 interface BuildDocumentBatchSubmenuItemsOptions {
+  imageSummaryLabel?: string;
+  onBindImageSummaryLabel?: (element: HTMLElement) => void;
   insertCommandIds: DocumentBatchCommandId[];
-  onCommandClick: (commandId: DocumentBatchCommandId, mode: DocumentBatchMode) => void;
+  onCommandClick: (commandId: DocumentBatchCommandId, mode: DocumentBatchMode) => void | Promise<void>;
   replaceCommandIds: DocumentBatchCommandId[];
 }
 
@@ -83,12 +85,32 @@ export function syncReadonlyMenuItemLabelElement(labelElement: Element, label: s
 export function buildDocumentBatchSubmenuItems(
   options: BuildDocumentBatchSubmenuItemsOptions,
 ): IMenu[] {
-  const items: IMenu[] = [
-    ...options.insertCommandIds.map(commandId => ({
-      click: () => options.onCommandClick(commandId, "insert"),
-      label: DOCUMENT_BATCH_COMMAND_DEFINITIONS[commandId].insertBatchLabel,
-    })),
-  ];
+  const items: IMenu[] = [];
+
+  if (options.imageSummaryLabel) {
+    const summaryItem: IMenu = {
+      label: options.imageSummaryLabel,
+      type: "readonly",
+    };
+    if (options.onBindImageSummaryLabel) {
+      summaryItem.bind = (element) => {
+        // 同步应用换行样式，避免多行占位文本初次渲染单行折叠导致后续布局抖动 (CLS)
+        const labelElement = (element as HTMLElement)?.querySelector?.(".b3-menu__label");
+        if (labelElement instanceof HTMLElement) {
+          labelElement.style.whiteSpace = "pre-line";
+        }
+        return options.onBindImageSummaryLabel?.(element as HTMLElement) as unknown as void;
+      };
+    }
+    items.push(summaryItem, {
+      type: "separator",
+    });
+  }
+
+  items.push(...options.insertCommandIds.map(commandId => ({
+    click: () => options.onCommandClick(commandId, "insert"),
+    label: DOCUMENT_BATCH_COMMAND_DEFINITIONS[commandId].insertBatchLabel,
+  })));
 
   if (options.insertCommandIds.length && options.replaceCommandIds.length) {
     items.push({
@@ -97,9 +119,9 @@ export function buildDocumentBatchSubmenuItems(
   }
 
   items.push(...options.replaceCommandIds.map(commandId => ({
-      click: () => options.onCommandClick(commandId, "replace"),
-      label: DOCUMENT_BATCH_COMMAND_DEFINITIONS[commandId].replaceBatchLabel,
-    })));
+    click: () => options.onCommandClick(commandId, "replace"),
+    label: DOCUMENT_BATCH_COMMAND_DEFINITIONS[commandId].replaceBatchLabel,
+  })));
 
   return items;
 }
