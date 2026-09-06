@@ -97,7 +97,8 @@
 
       .image-quickedit-setting-grid,
       .image-quickedit-batch-grid,
-      .image-quickedit-notification-row {
+      .image-quickedit-notification-row,
+      .image-quickedit-batch-skip-panel {
         grid-column: 1 / -1 !important;
         width: 100% !important;
       }
@@ -362,6 +363,72 @@
   }
 }
 
+// 文档批量菜单跳过特定图片设置面板
+.image-quickedit-batch-skip-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--b3-border-color);
+  background-color: var(--b3-theme-surface);
+  margin-top: 8px;
+  box-sizing: border-box;
+
+  .image-quickedit-skip-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .image-quickedit-setting-hint {
+    margin-top: -2px;
+  }
+
+  .image-quickedit-param-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+    transition: opacity 0.2s ease;
+
+    @media (max-width: 520px) {
+      flex-direction: column;
+      align-items: stretch;
+    }
+  }
+
+  .image-quickedit-param-col {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    flex: 1;
+
+    .image-quickedit-param-label {
+      font-size: 12px;
+      color: var(--b3-theme-on-surface-light);
+    }
+
+    .image-quickedit-input-affix {
+      position: relative;
+      display: flex;
+      align-items: center;
+
+      input {
+        width: 100%;
+        padding-right: 34px;
+      }
+
+      .image-quickedit-affix-text {
+        position: absolute;
+        right: 10px;
+        font-size: 12px;
+        color: var(--b3-theme-on-surface-light);
+        pointer-events: none;
+      }
+    }
+  }
+}
 
 // 兼容旧类名
 .image-quickedit-setting-option {

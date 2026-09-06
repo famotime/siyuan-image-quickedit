@@ -15,12 +15,13 @@ interface ResultMarkdownInput {
   };
 }
 
-interface BatchResultMessageInput {
+export interface BatchResultMessageInput {
   failureCount: number;
   mode: "insert" | "replace";
   processedCount: number;
   savedBytes: number;
   successCount: number;
+  skippedCount?: number;
 }
 
 export function formatBytes(bytes: number): string {
@@ -127,14 +128,24 @@ export function buildResultMarkdown(input: ResultMarkdownInput): string {
 }
 
 export function buildBatchResultMessage(input: BatchResultMessageInput): string {
+  if (input.processedCount > 0 && input.skippedCount === input.processedCount) {
+    return `本文档共${input.processedCount}个图片，全部符合跳过条件，未做任何处理。`;
+  }
+
   const completionSuffix = input.mode === "replace"
     ? "原图已直接替换，正文文本未改动，请审核。"
     : input.failureCount > 0
       ? "原图未删除，成功转换后的新图片已经插入正文，请审核。"
       : "原图未删除，转换后新图片已经插入正文，请审核。";
 
+  const skippedText = input.skippedCount ? `，跳过${input.skippedCount}个` : "";
+
   if (input.failureCount > 0) {
-    return `已处理本文档${input.processedCount}个图片，其中成功${input.successCount}个，失败${input.failureCount}个；总计减少存储空间${formatBytes(input.savedBytes)}。${completionSuffix}`;
+    return `已处理本文档${input.processedCount}个图片，其中成功${input.successCount}个${skippedText}，失败${input.failureCount}个；总计减少存储空间${formatBytes(input.savedBytes)}。${completionSuffix}`;
+  }
+
+  if (input.skippedCount) {
+    return `已处理本文档${input.processedCount}个图片，其中成功${input.successCount}个${skippedText}；总计减少存储空间${formatBytes(input.savedBytes)}。${completionSuffix}`;
   }
 
   return `已处理本文档${input.processedCount}个图片，总计减少存储空间${formatBytes(input.savedBytes)}，${completionSuffix}`;

@@ -1,6 +1,11 @@
+// @vitest-environment jsdom
 import { expect, test, vi } from "vitest";
-
-import { buildCompressionScaleSteps, collectImageTargetsByDocId } from "../src/services/image-workflow.ts";
+import {
+  addBorderToImageTarget,
+  buildCompressionScaleSteps,
+  collectImageTargetsByDocId,
+  prepareProcessedImage,
+} from "../src/services/image-workflow.ts";
 
 vi.mock("../src/services/kernel-query.ts", () => ({
   getDocBlockMarkdowns: vi.fn(async (docId: string) => {
@@ -87,4 +92,52 @@ test("collectImageTargetsByDocId extracts both markdown and HTML img tags across
     expect.objectContaining({ blockId: "block-3", src: "/assets/pic2.png" }),
     expect.objectContaining({ blockId: "block-3", src: "https://example.com/pic3.jpg" }),
   ]));
+});
+
+test("prepareProcessedImage returns skipped result when image meets skip conditions", async () => {
+  const fakeBlob = new Blob(["small image data"], { type: "image/png" });
+  vi.stubGlobal("fetch", vi.fn(async () => ({
+    ok: true,
+    blob: async () => fakeBlob,
+  })));
+  vi.stubGlobal("createImageBitmap", vi.fn(async () => ({
+    width: 60,
+    height: 60,
+    close: vi.fn(),
+  })));
+
+  const result = await prepareProcessedImage(
+    { alt: "demo", blockId: "b1", displayHeight: 60, displayWidth: 60, src: "/assets/demo.png" },
+    "convert-webp",
+    "comprehensive",
+    undefined,
+    { enabled: true, minSizeKb: 500, minDimensionPx: 100 },
+  );
+
+  expect("skipped" in result && result.skipped).toBe(true);
+  expect(result.commandLabel).toBe("转为 WebP 格式");
+  expect(result.original.width).toBe(60);
+  expect(result.original.height).toBe(60);
+});
+
+test("addBorderToImageTarget returns skipped result when image meets skip conditions", async () => {
+  const fakeBlob = new Blob(["small image data"], { type: "image/png" });
+  vi.stubGlobal("fetch", vi.fn(async () => ({
+    ok: true,
+    blob: async () => fakeBlob,
+  })));
+  vi.stubGlobal("createImageBitmap", vi.fn(async () => ({
+    width: 80,
+    height: 80,
+    close: vi.fn(),
+  })));
+
+  const result = await addBorderToImageTarget(
+    { alt: "demo", blockId: "b1", displayHeight: 80, displayWidth: 80, src: "/assets/demo.png" },
+    undefined,
+    { enabled: true, minSizeKb: 500, minDimensionPx: 100 },
+  );
+
+  expect("skipped" in result && result.skipped).toBe(true);
+  expect(result.commandLabel).toBe("添加图像边框");
 });

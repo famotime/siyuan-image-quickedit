@@ -637,6 +637,11 @@ test("processDocumentTargets inserts bordered images for add-border document com
       borderWidthPx: 2,
       gapPx: 0,
     }),
+    expect.objectContaining({
+      enabled: true,
+      minDimensionPx: 100,
+      minSizeKb: 300,
+    }),
   );
   expect(insertMarkdownAfterBlock).toHaveBeenCalledWith(
     "img-1",
@@ -951,6 +956,134 @@ test("decorateDocumentMenu reuses collected targets when executing a command wit
     "convert-webp",
     "insert",
   );
+});
+
+test("createDocumentBatchMenuToggleGroup renders skip options panel, binds inputs, and responds to reset defaults", async () => {
+  const { default: SiyuanImageQuickEditPlugin } = await import("../src/index.ts");
+  const plugin = new SiyuanImageQuickEditPlugin();
+  const saveData = vi.fn().mockResolvedValue(undefined);
+  (plugin as any).saveData = saveData;
+  (plugin as any).settings = mergeSettings();
+
+  const group = (plugin as any).createDocumentBatchMenuToggleGroup();
+  const skipPanel = group.querySelector(".image-quickedit-batch-skip-panel") as HTMLElement;
+  expect(skipPanel).toBeTruthy();
+
+  const switchInput = skipPanel.querySelector("input[type='checkbox']") as HTMLInputElement;
+  expect(switchInput).toBeTruthy();
+  expect(switchInput.checked).toBe(true);
+
+  const numberInputs = skipPanel.querySelectorAll("input[type='number']") as NodeListOf<HTMLInputElement>;
+  expect(numberInputs).toHaveLength(2);
+  const [sizeInput, dimensionInput] = Array.from(numberInputs);
+  expect(sizeInput.value).toBe("300");
+  expect(dimensionInput.value).toBe("100");
+
+  // 切换开关为 false
+  switchInput.checked = false;
+  switchInput.dispatchEvent(new Event("change"));
+  expect((plugin as any).settings.documentBatchSkipOptions.enabled).toBe(false);
+
+  // 修改阈值
+  sizeInput.value = "200";
+  sizeInput.dispatchEvent(new Event("change"));
+  expect((plugin as any).settings.documentBatchSkipOptions.minSizeKb).toBe(200);
+
+  dimensionInput.value = "80";
+  dimensionInput.dispatchEvent(new Event("change"));
+  expect((plugin as any).settings.documentBatchSkipOptions.minDimensionPx).toBe(80);
+
+  // 点击工具条“恢复默认”
+  const resetBtn = group.querySelector(".image-quickedit-toolbar .image-quickedit-tool-btn:last-child") as HTMLButtonElement;
+  resetBtn.click();
+
+  expect(switchInput.checked).toBe(true);
+  expect(sizeInput.value).toBe("300");
+  expect(dimensionInput.value).toBe("100");
+  expect((plugin as any).settings.documentBatchSkipOptions).toEqual({
+    enabled: true,
+    minSizeKb: 300,
+    minDimensionPx: 100,
+  });
+});
+
+test("processDocumentTargets skips images matching skip conditions and reports skipped count in summary", async () => {
+  const kernel = await import("../src/services/kernel.ts");
+  const workflow = await import("../src/services/image-workflow.ts");
+
+  vi.spyOn(workflow, "prepareProcessedImage").mockImplementation(async (target, commandId, strategy, onProgress, skipOptions) => {
+    if (target.src.includes("small")) {
+      return {
+        commandId,
+        commandLabel: "转换为 WebP",
+        fileName: "small.webp",
+        original: {
+          bytes: 100 * 1024,
+          colorDepth: 24,
+          format: "png",
+          height: 50,
+          mimeType: "image/png",
+          width: 50,
+        },
+        skipped: true,
+      };
+    }
+    return {
+      commandId,
+      commandLabel: "转换为 WebP",
+      fileName: "normal.webp",
+      original: {
+        bytes: 800 * 1024,
+        colorDepth: 24,
+        format: "png",
+        height: 600,
+        mimeType: "image/png",
+        width: 800,
+      },
+      output: {
+        blob: new Blob(["normal"], { type: "image/webp" }),
+        bytes: 200 * 1024,
+        format: "webp",
+        height: 600,
+        width: 800,
+      },
+    };
+  });
+
+  const uploadAsset = vi.spyOn(kernel, "uploadAsset").mockResolvedValue("/assets/normal.webp");
+  const updateMarkdownBlock = vi.spyOn(kernel, "updateMarkdownBlock").mockResolvedValue(undefined);
+  vi.spyOn(kernel, "getBlockMarkdown").mockResolvedValue("![normal](/assets/normal.png)");
+
+  const { default: SiyuanImageQuickEditPlugin } = await import("../src/index.ts");
+  const plugin = new SiyuanImageQuickEditPlugin();
+  (plugin as any).settings = mergeSettings();
+
+  const result = await (plugin as any).processDocumentTargets([
+    {
+      alt: "small",
+      blockId: "img-small",
+      displayHeight: 50,
+      displayWidth: 50,
+      src: "/assets/small.png",
+    },
+    {
+      alt: "normal",
+      blockId: "img-normal",
+      displayHeight: 600,
+      displayWidth: 800,
+      src: "/assets/normal.png",
+    },
+  ], "convert-webp", "replace");
+
+  expect(result.processedCount).toBe(2);
+  expect(result.skippedCount).toBe(1);
+  expect(result.successCount).toBe(1);
+  expect(result.failureCount).toBe(0);
+  expect(result.savedBytes).toBe(600 * 1024);
+
+  expect(uploadAsset).toHaveBeenCalledTimes(1);
+  expect(updateMarkdownBlock).toHaveBeenCalledTimes(1);
+  expect(updateMarkdownBlock).toHaveBeenCalledWith("img-normal", expect.anything());
 });
 
 

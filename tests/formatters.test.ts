@@ -140,6 +140,45 @@ test("buildBatchResultMessage uses replacement copy for replace mode", () => {
   expect(message).toBe("已处理本文档4个图片，总计减少存储空间256.00 KB，原图已直接替换，正文文本未改动，请审核。");
 });
 
+test("buildBatchResultMessage reports skipped count when some images are skipped", () => {
+  const message = buildBatchResultMessage({
+    failureCount: 0,
+    mode: "replace",
+    processedCount: 5,
+    savedBytes: 524_288,
+    skippedCount: 2,
+    successCount: 3,
+  });
+
+  expect(message).toBe("已处理本文档5个图片，其中成功3个，跳过2个；总计减少存储空间512.00 KB。原图已直接替换，正文文本未改动，请审核。");
+});
+
+test("buildBatchResultMessage reports friendly copy when all images are skipped", () => {
+  const message = buildBatchResultMessage({
+    failureCount: 0,
+    mode: "replace",
+    processedCount: 3,
+    savedBytes: 0,
+    skippedCount: 3,
+    successCount: 0,
+  });
+
+  expect(message).toBe("本文档共3个图片，全部符合跳过条件，未做任何处理。");
+});
+
+test("buildBatchResultMessage reports both failures and skipped count", () => {
+  const message = buildBatchResultMessage({
+    failureCount: 1,
+    mode: "insert",
+    processedCount: 6,
+    savedBytes: 204_800,
+    skippedCount: 2,
+    successCount: 3,
+  });
+
+  expect(message).toBe("已处理本文档6个图片，其中成功3个，跳过2个，失败1个；总计减少存储空间200.00 KB。原图未删除，成功转换后的新图片已经插入正文，请审核。");
+});
+
 test("buildDocumentImageSummaryLabel joins image count and embedded asset size on separate lines", () => {
   expect(buildDocumentImageSummaryLabel({
     documentEmbeddedAssetBytes: 1_234_567,

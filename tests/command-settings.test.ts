@@ -1,10 +1,12 @@
 import { expect, test } from "vitest";
 
 import {
+  DEFAULT_DOCUMENT_BATCH_SKIP_OPTIONS,
   DEFAULT_SETTINGS,
   getEnabledCommandIds,
   getEnabledDocumentBatchCommandIds,
   mergeSettings,
+  shouldSkipImageTarget,
 } from "../src/core/command-settings.ts";
 
 test("mergeSettings fills missing menu toggles with defaults", () => {
@@ -147,4 +149,90 @@ test("getEnabledDocumentBatchCommandIds keeps add-border disabled by default", (
     "compress-50",
     "compress-10",
   ]);
+});
+
+test("DEFAULT_DOCUMENT_BATCH_SKIP_OPTIONS defaults to enabled with 300KB and 100px", () => {
+  expect(DEFAULT_DOCUMENT_BATCH_SKIP_OPTIONS).toEqual({
+    enabled: true,
+    minSizeKb: 300,
+    minDimensionPx: 100,
+  });
+});
+
+test("mergeSettings fills missing documentBatchSkipOptions with defaults", () => {
+  const settings = mergeSettings({});
+  expect(settings.documentBatchSkipOptions).toEqual({
+    enabled: true,
+    minSizeKb: 300,
+    minDimensionPx: 100,
+  });
+});
+
+test("mergeSettings preserves and normalizes documentBatchSkipOptions", () => {
+  const settings = mergeSettings({
+    documentBatchSkipOptions: {
+      enabled: false,
+      minSizeKb: 250,
+      minDimensionPx: 80,
+    },
+  });
+  expect(settings.documentBatchSkipOptions).toEqual({
+    enabled: false,
+    minSizeKb: 250,
+    minDimensionPx: 80,
+  });
+});
+
+test("mergeSettings handles legacy or fallback dimension properties", () => {
+  const settings = mergeSettings({
+    documentBatchSkipOptions: {
+      minWidthPx: 120,
+    } as any,
+  });
+  expect(settings.documentBatchSkipOptions.minDimensionPx).toBe(120);
+});
+
+test("shouldSkipImageTarget skips when file size is below threshold", () => {
+  const options = { enabled: true, minSizeKb: 500, minDimensionPx: 100 };
+  // 400KB < 500KB (400 * 1024 < 500 * 1024), 800x600 >= 100
+  expect(shouldSkipImageTarget({ bytes: 400 * 1024, width: 800, height: 600 }, options)).toBe(true);
+});
+
+test("shouldSkipImageTarget skips when width is below dimension threshold", () => {
+  const options = { enabled: true, minSizeKb: 500, minDimensionPx: 100 };
+  // 600KB >= 500KB, width 99 < 100
+  expect(shouldSkipImageTarget({ bytes: 600 * 1024, width: 99, height: 600 }, options)).toBe(true);
+});
+
+test("shouldSkipImageTarget skips when height is below dimension threshold", () => {
+  const options = { enabled: true, minSizeKb: 500, minDimensionPx: 100 };
+  // 600KB >= 500KB, height 99 < 100
+  expect(shouldSkipImageTarget({ bytes: 600 * 1024, width: 800, height: 99 }, options)).toBe(true);
+});
+
+test("shouldSkipImageTarget does not skip when both size and dimensions satisfy thresholds", () => {
+  const options = { enabled: true, minSizeKb: 500, minDimensionPx: 100 };
+  // 500KB >= 500KB, 100x100 >= 100
+  expect(shouldSkipImageTarget({ bytes: 500 * 1024, width: 100, height: 100 }, options)).toBe(false);
+  expect(shouldSkipImageTarget({ bytes: 1024 * 1024, width: 1920, height: 1080 }, options)).toBe(false);
+});
+
+test("shouldSkipImageTarget does not skip when enabled is false", () => {
+  const options = { enabled: false, minSizeKb: 500, minDimensionPx: 100 };
+  expect(shouldSkipImageTarget({ bytes: 100, width: 10, height: 10 }, options)).toBe(false);
+});
+
+test("shouldSkipImageTarget ignores checks when threshold is 0", () => {
+  // size threshold 0 -> do not skip by size
+  const optionsNoSize = { enabled: true, minSizeKb: 0, minDimensionPx: 100 };
+  expect(shouldSkipImageTarget({ bytes: 100, width: 200, height: 200 }, optionsNoSize)).toBe(false);
+
+  // dimension threshold 0 -> do not skip by dimension
+  const optionsNoDim = { enabled: true, minSizeKb: 500, minDimensionPx: 0 };
+  expect(shouldSkipImageTarget({ bytes: 600 * 1024, width: 10, height: 10 }, optionsNoDim)).toBe(false);
+});
+
+test("shouldSkipImageTarget returns false when options is null or undefined", () => {
+  expect(shouldSkipImageTarget({ bytes: 100, width: 10, height: 10 }, null)).toBe(false);
+  expect(shouldSkipImageTarget({ bytes: 100, width: 10, height: 10 }, undefined)).toBe(false);
 });

@@ -3,8 +3,10 @@ import type { IProtyle } from "siyuan";
 import { COMMAND_DEFINITIONS } from "@/core/command-meta.ts";
 import {
   DEFAULT_SUPER_BLOCK_MERGE_OPTIONS,
+  shouldSkipImageTarget,
   type CommandId,
   type CompressionStrategy,
+  type DocumentBatchSkipOptions,
   type SuperBlockMergeOptions,
 } from "@/core/command-settings.ts";
 import { buildImageInfoLabel, buildResultMarkdown } from "@/core/formatters.ts";
@@ -56,6 +58,14 @@ export interface GeneratedImageResult {
   output: ProcessedImageOutput;
 }
 
+export interface SkippedImageResult {
+  commandId?: CommandId;
+  commandLabel: string;
+  fileName: string;
+  original: ImageMetadata;
+  skipped: true;
+}
+
 export interface PreparedImageResult extends GeneratedImageResult {
   commandId: CommandId;
 }
@@ -103,7 +113,8 @@ function getBlockElement(element: HTMLElement): HTMLElement | null {
 }
 
 function normalizeUrl(src: string): URL {
-  return new URL(src, location.origin);
+  const origin = typeof location !== "undefined" ? location.origin : "http://127.0.0.1:6806";
+  return new URL(src, origin);
 }
 
 function getFileNameFromSrc(src: string): string {
@@ -1017,10 +1028,20 @@ export async function mergeSuperBlockImages(
 export async function addBorderToImageTarget(
   target: ImageTarget,
   options: SuperBlockMergeOptions = DEFAULT_SUPER_BLOCK_MERGE_OPTIONS,
-): Promise<GeneratedImageResult> {
+  skipOptions?: DocumentBatchSkipOptions | null,
+): Promise<GeneratedImageResult | SkippedImageResult> {
   const inspected = await inspectImageTarget(target);
 
   try {
+    if (shouldSkipImageTarget(inspected.original, skipOptions)) {
+      return {
+        commandLabel: ADD_BORDER_COMMAND_LABEL,
+        fileName: inspected.fileName,
+        original: inspected.original,
+        skipped: true,
+      };
+    }
+
     const output = await addBorderToBitmap(inspected.bitmap, options);
     const sourceBaseName = inspected.fileName.replace(/\.[^.]+$/, "") || inspected.fileName;
 
@@ -1067,10 +1088,21 @@ export async function prepareProcessedImage(
   commandId: CommandId,
   strategy: CompressionStrategy,
   onProgress?: (message: string) => void,
-): Promise<PreparedImageResult> {
+  skipOptions?: DocumentBatchSkipOptions | null,
+): Promise<PreparedImageResult | SkippedImageResult> {
   const inspected = await inspectImageTarget(target);
 
   try {
+    if (shouldSkipImageTarget(inspected.original, skipOptions)) {
+      return {
+        commandId,
+        commandLabel: COMMAND_DEFINITIONS[commandId].label,
+        fileName: inspected.fileName,
+        original: inspected.original,
+        skipped: true,
+      };
+    }
+
     const output = commandId === "convert-webp"
       ? await convertToWebp(inspected)
       : await compressToTargetRatio(inspected, commandId, strategy, onProgress);

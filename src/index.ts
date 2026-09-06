@@ -15,12 +15,14 @@ import {
 import {
   COMMAND_ORDER,
   DOCUMENT_BATCH_COMMAND_ORDER,
+  DEFAULT_DOCUMENT_BATCH_SKIP_OPTIONS,
   DEFAULT_SETTINGS,
   DEFAULT_SUPER_BLOCK_MERGE_OPTIONS,
   type CommandMenuSettingKey,
   type CommandId,
   type CompressionStrategy,
   type DocumentBatchCommandId,
+  type DocumentBatchSkipOptions,
   type PluginSettings,
   type SuperBlockMergeOptions,
   getEnabledCommandIds,
@@ -486,6 +488,77 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
       });
     });
 
+    // 跳过特定图片设置面板
+    const skipPanel = document.createElement("div");
+    skipPanel.className = "image-quickedit-batch-skip-panel";
+
+    // 开关行
+    const skipHeader = document.createElement("div");
+    skipHeader.className = "image-quickedit-skip-header";
+
+    const skipSwitchLabel = document.createElement("label");
+    skipSwitchLabel.className = "image-quickedit-switch-container image-quickedit-setting-option";
+
+    const skipSwitch = document.createElement("input");
+    skipSwitch.className = "b3-switch fn__flex-center";
+    skipSwitch.type = "checkbox";
+    skipSwitch.checked = this.settings.documentBatchSkipOptions.enabled;
+
+    const skipSwitchText = document.createElement("span");
+    skipSwitchText.className = "image-quickedit-switch-status";
+    skipSwitchText.textContent = "跳过无需处理的图片";
+
+    skipSwitchLabel.append(skipSwitch, skipSwitchText);
+    skipHeader.appendChild(skipSwitchLabel);
+
+    // 提示说明
+    const skipHint = document.createElement("div");
+    skipHint.className = "image-quickedit-setting-hint";
+    skipHint.textContent = "批量处理时，若图片文件大小小于设定值，或宽高之一小于设定值，则跳过不处理（设为 0 表示不限制）。";
+
+    // 阈值数值输入行（文件大小 + 宽高之一）
+    const paramRow = document.createElement("div");
+    paramRow.className = "image-quickedit-param-row";
+
+    const sizeCol = this.createSettingParamNumberCol({
+      affix: "KB",
+      initialValue: this.settings.documentBatchSkipOptions.minSizeKb,
+      label: "文件大小小于",
+      onChange: (value) => {
+        this.persistDocumentBatchSkipOptions({ minSizeKb: value });
+      },
+    });
+
+    const dimensionCol = this.createSettingParamNumberCol({
+      affix: "px",
+      initialValue: this.settings.documentBatchSkipOptions.minDimensionPx,
+      label: "宽或高之一小于",
+      onChange: (value) => {
+        this.persistDocumentBatchSkipOptions({ minDimensionPx: value });
+      },
+    });
+
+    paramRow.append(sizeCol, dimensionCol);
+
+    const updateDisabledState = (enabled: boolean) => {
+      sizeCol.querySelectorAll<HTMLInputElement>("input").forEach(input => (input.disabled = !enabled));
+      dimensionCol.querySelectorAll<HTMLInputElement>("input").forEach(input => (input.disabled = !enabled));
+      paramRow.style.opacity = enabled ? "1" : "0.5";
+      paramRow.style.pointerEvents = enabled ? "auto" : "none";
+    };
+
+    updateDisabledState(this.settings.documentBatchSkipOptions.enabled);
+
+    skipSwitch.addEventListener("change", () => {
+      this.persistDocumentBatchSkipOptions({
+        enabled: skipSwitch.checked,
+      });
+      updateDisabledState(skipSwitch.checked);
+    });
+
+    skipPanel.append(skipHeader, skipHint, paramRow);
+    wrapper.appendChild(skipPanel);
+
     resetBtn.addEventListener("click", () => {
       insertCheckboxes.forEach((cb) => {
         const id = cb.dataset.commandId as DocumentBatchCommandId;
@@ -503,6 +576,26 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
           cb.dispatchEvent(new Event("change"));
         }
       });
+
+      if (skipSwitch.checked !== DEFAULT_SETTINGS.documentBatchSkipOptions.enabled) {
+        skipSwitch.checked = DEFAULT_SETTINGS.documentBatchSkipOptions.enabled;
+        skipSwitch.dispatchEvent(new Event("change"));
+      }
+
+      const sizeInput = sizeCol.querySelector("input");
+      if (sizeInput && Number(sizeInput.value) !== DEFAULT_SETTINGS.documentBatchSkipOptions.minSizeKb) {
+        sizeInput.value = String(DEFAULT_SETTINGS.documentBatchSkipOptions.minSizeKb);
+        sizeInput.dispatchEvent(new Event("change"));
+      }
+
+      const dimensionInput = dimensionCol.querySelector("input");
+      if (dimensionInput && Number(dimensionInput.value) !== DEFAULT_SETTINGS.documentBatchSkipOptions.minDimensionPx) {
+        dimensionInput.value = String(DEFAULT_SETTINGS.documentBatchSkipOptions.minDimensionPx);
+        dimensionInput.dispatchEvent(new Event("change"));
+      }
+
+      this.persistDocumentBatchSkipOptions({ ...DEFAULT_SETTINGS.documentBatchSkipOptions });
+      updateDisabledState(DEFAULT_SETTINGS.documentBatchSkipOptions.enabled);
     });
 
     return wrapper;
@@ -1314,12 +1407,23 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
     });
   }
 
+  private persistDocumentBatchSkipOptions(nextOptions: Partial<DocumentBatchSkipOptions>): void {
+    this.persistSettings({
+      documentBatchSkipOptions: {
+        ...this.settings.documentBatchSkipOptions,
+        ...nextOptions,
+      },
+    });
+  }
+
   private persistSettings(nextSettings: Partial<PluginSettings>): void {
     this.settings = mergeSettings({
       ...this.settings,
       ...nextSettings,
     });
-    void this.saveData(SETTINGS_STORAGE, this.settings);
+    if (typeof this.saveData === "function") {
+      void this.saveData(SETTINGS_STORAGE, this.settings);
+    }
   }
 
   private async processSingleTarget(target: ImageTarget, commandId: CommandId): Promise<void> {
@@ -1417,10 +1521,11 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
     commandId: DocumentBatchCommandId,
     mode: DocumentBatchMode,
   ): Promise<{
-    processedCount: number
-    successCount: number
-    failureCount: number
-    savedBytes: number
+    processedCount: number;
+    successCount: number;
+    failureCount: number;
+    savedBytes: number;
+    skippedCount: number;
   }> {
     const indexedTargets = targets.map((target, index) => ({
       ...target,
@@ -1441,10 +1546,10 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
         }
 
         if (commandId === "add-border") {
-          return this.processBorderTarget(target, mode);
+          return this.processBorderTarget(target, mode, this.settings.documentBatchSkipOptions);
         }
 
-        return this.processTarget(target, commandId, mode);
+        return this.processTarget(target, commandId, mode, this.settings.documentBatchSkipOptions);
       },
       targets: indexedTargets.map((target, index) => ({
         id: target.executionId,
@@ -1452,7 +1557,12 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
       })),
     });
 
+    const skippedCount = result.successes.filter(s => (s as any).skipped).length;
+    const actualSuccessCount = result.successes.length - skippedCount;
     const savedBytes = result.successes.reduce((total, success) => {
+      if ((success as any).skipped) {
+        return total;
+      }
       return total + Math.max(0, success.originalBytes - success.outputBytes);
     }, 0);
     const summaryMessage = buildBatchResultMessage({
@@ -1460,7 +1570,8 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
       mode,
       processedCount: targets.length,
       savedBytes,
-      successCount: result.successes.length,
+      skippedCount,
+      successCount: actualSuccessCount,
     });
 
     showMessage(
@@ -1471,7 +1582,8 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
 
     return {
       processedCount: targets.length,
-      successCount: result.successes.length,
+      successCount: actualSuccessCount,
+      skippedCount,
       failureCount: result.failures.length,
       savedBytes,
     };
@@ -1481,10 +1593,12 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
     target: ImageTarget,
     commandId: CommandId,
     mode: DocumentBatchMode,
+    skipOptions?: DocumentBatchSkipOptions,
   ): Promise<{
     originalBytes: number;
     outputBytes: number;
     summary: string;
+    skipped?: boolean;
   }> {
     this.reportProgress(`${COMMAND_DEFINITIONS[commandId].label}：正在读取图片`);
     const prepared = await prepareProcessedImage(
@@ -1492,7 +1606,17 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
       commandId,
       this.settings.compressionStrategy,
       message => this.reportProgress(`${COMMAND_DEFINITIONS[commandId].label}：${message}`),
+      skipOptions,
     );
+
+    if ("skipped" in prepared && prepared.skipped) {
+      return {
+        originalBytes: prepared.original.bytes,
+        outputBytes: prepared.original.bytes,
+        skipped: true,
+        summary: `${prepared.commandLabel}：图片符合跳过条件，已跳过`,
+      };
+    }
 
     return this.finalizeGeneratedTarget(target, prepared, mode, COMMAND_DEFINITIONS[commandId].label);
   }
@@ -1500,13 +1624,29 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
   private async processBorderTarget(
     target: ImageTarget,
     mode: DocumentBatchMode,
+    skipOptions?: DocumentBatchSkipOptions,
   ): Promise<{
     originalBytes: number;
     outputBytes: number;
     summary: string;
+    skipped?: boolean;
   }> {
     this.reportProgress("添加图像边框：正在读取图片");
-    const prepared = await prepareBorderedImage(target, this.settings.superBlockMergeOptions);
+    const prepared = await prepareBorderedImage(
+      target,
+      this.settings.superBlockMergeOptions,
+      skipOptions,
+    );
+
+    if ("skipped" in prepared && prepared.skipped) {
+      return {
+        originalBytes: prepared.original.bytes,
+        outputBytes: prepared.original.bytes,
+        skipped: true,
+        summary: `${prepared.commandLabel}：图片符合跳过条件，已跳过`,
+      };
+    }
+
     return this.finalizeGeneratedTarget(target, prepared, mode, prepared.commandLabel);
   }
 
@@ -1832,7 +1972,9 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
             failureCount: batchResult.failureCount,
             label: batchResult.failureCount > 0
               ? `已处理 ${batchResult.processedCount} 张图片，成功 ${batchResult.successCount}，失败 ${batchResult.failureCount}；节省 ${formatBytes(batchResult.savedBytes)}`
-              : `已处理 ${batchResult.processedCount} 张图片，节省 ${formatBytes(batchResult.savedBytes)}`,
+              : batchResult.skippedCount > 0
+                ? `已处理 ${batchResult.processedCount} 张图片，成功 ${batchResult.successCount}，跳过 ${batchResult.skippedCount}；节省 ${formatBytes(batchResult.savedBytes)}`
+                : `已处理 ${batchResult.processedCount} 张图片，节省 ${formatBytes(batchResult.savedBytes)}`,
             processedCount: batchResult.processedCount,
             savedBytes: batchResult.savedBytes,
             successCount: batchResult.successCount,
