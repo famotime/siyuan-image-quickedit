@@ -117,13 +117,9 @@ export function buildResultMarkdown(input: ResultMarkdownInput): string {
   const summary = `${input.commandLabel}完成：压缩后图片分辨率${formatResolution(input.output.width, input.output.height)}，${buildDimensionSummary(input.original, input.output)}；大小${formatBytes(input.output.bytes)}，${buildStorageSummary(input.original.bytes, input.output.bytes)}，输出格式 ${input.output.format.toUpperCase()}。`;
 
   return [
-    "---",
-    "",
     `> **==${summary}==**`,
     "",
     `![processed image](${input.output.assetPath})`,
-    "",
-    "---",
   ].join("\n");
 }
 

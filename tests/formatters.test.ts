@@ -62,13 +62,9 @@ test("buildResultMarkdown includes summary text and processed image", () => {
   });
 
   expect(markdown).toBe([
-    "---",
-    "",
     "> **==压缩到50%完成：压缩后图片分辨率1024×572，尺寸比原图（2048×1144）减少50.00%；大小97.66 KB，存储空间相比原图（195.31 KB）减少50.00%，输出格式 WEBP。==**",
     "",
     "![processed image](/assets/demo.webp)",
-    "",
-    "---",
   ].join("\n"));
 });
 
@@ -90,13 +86,9 @@ test("buildResultMarkdown uses unchanged copy when image dimensions stay the sam
   });
 
   expect(markdown).toBe([
-    "---",
-    "",
     "> **==压缩到70%完成：压缩后图片分辨率1024×572，尺寸不变；大小100.00 KB，存储空间相比原图（142.00 KB）减少29.58%，输出格式 WEBP。==**",
     "",
     "![processed image](/assets/demo.webp)",
-    "",
-    "---",
   ].join("\n"));
 });
 
