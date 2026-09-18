@@ -2,9 +2,9 @@
 // 思源图片快剪 - 插件设置页优雅舒适布局样式
 // ==========================================
 
-// 思源设置弹窗内条目容器：取消左右两列布局，转为标题居上、内容居下的上下换行结构
+// 思源设置弹窗内条目容器：仅针对本插件（image-quickedit）条目，取消左右两列布局，转为标题居上、内容居下的上下换行结构
 .b3-dialog__content {
-  .config-item {
+  .config-item:has([class*="image-quickedit-"]) {
     display: flex !important;
     flex-direction: column !important;
     align-items: stretch !important;
