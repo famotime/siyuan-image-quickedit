@@ -62,3 +62,39 @@ interface IResForwardProxy {
 interface IResExportResources {
   path: string;
 }
+
+interface IAssetRelinkMapping {
+  oldPath: string;
+  newPath: string;
+}
+
+interface IAssetReference {
+  oldPath?: string;
+  type: string;
+  notebook: string;
+  rootID: string;
+  path: string;
+  blockID: string;
+  avID?: string;
+  valueID?: string;
+  reference: string;
+  replacement?: string;
+  relinkable: boolean;
+  reason?: string;
+}
+
+interface IResAssetReferences {
+  references: IAssetReference[];
+  skippedNotebooks: string[];
+  dryRun: boolean;
+  historyPath?: string;
+  updated: number;
+  items?: Array<{
+    oldPath: string;
+    newPath: string;
+    ok: boolean;
+    reason: string;
+    references: IAssetReference[];
+    updated: number;
+  }>;
+}

@@ -54,6 +54,7 @@ import { runTargetsSequentially } from "@/core/task-runner.ts";
 import {
   getBlockMarkdown,
   insertMarkdownAfterBlock,
+  safeRelinkAssetWithFallback,
   updateMarkdownBlock,
   uploadAsset,
 } from "@/services/kernel.ts";
@@ -1678,14 +1679,26 @@ export default class SiyuanImageQuickEditPlugin extends Plugin {
 
     if (mode === "replace") {
       this.reportProgress(`${progressLabel}：正在替换原图`);
-      const blockMarkdown = await getBlockMarkdown(target.blockId);
-      const updatedMarkdown = buildReplacedBlockMarkdown(blockMarkdown, target, assetPath);
-      await updateMarkdownBlock(target.blockId, updatedMarkdown);
+
+      const relinkResult = await safeRelinkAssetWithFallback({
+        blockId: target.blockId,
+        newAssetPath: assetPath,
+        oldSrc: target.src,
+        onFallback: async () => {
+          const blockMarkdown = await getBlockMarkdown(target.blockId);
+          const updatedMarkdown = buildReplacedBlockMarkdown(blockMarkdown, target, assetPath);
+          await updateMarkdownBlock(target.blockId, updatedMarkdown);
+        },
+      });
+
+      const summary = relinkResult.method === "relink"
+        ? `${prepared.commandLabel}已完成全局替换（更新 ${relinkResult.relinkedCount} 处引用）`
+        : `${prepared.commandLabel}已直接替换原图`;
 
       return {
         originalBytes: prepared.original.bytes,
         outputBytes: prepared.output.bytes,
-        summary: `${prepared.commandLabel}已直接替换原图`,
+        summary,
       };
     }
 

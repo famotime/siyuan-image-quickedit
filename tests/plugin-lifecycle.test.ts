@@ -3,9 +3,12 @@ import { afterEach, expect, test, vi } from "vitest";
 
 import { mergeSettings } from "../src/core/command-settings.ts";
 
+import { resetRelinkSupportStateForTesting } from "../src/services/kernel.ts";
+
 afterEach(() => {
   vi.clearAllMocks();
   vi.resetModules();
+  resetRelinkSupportStateForTesting();
   document.body.innerHTML = "";
 });
 
@@ -673,6 +676,59 @@ test("processDocumentTargets replaces original images for add-border replace com
     },
   });
   vi.spyOn(kernel, "uploadAsset").mockResolvedValue("/assets/demo.quickedit-add-border-1.webp");
+  const relinkAsset = vi.spyOn(kernel.kernelApi, "relinkAsset").mockResolvedValue({
+    dryRun: false,
+    references: [],
+    skippedNotebooks: [],
+    updated: 1,
+  });
+
+  const { default: SiyuanImageQuickEditPlugin } = await import("../src/index.ts");
+  const plugin = new SiyuanImageQuickEditPlugin();
+  (plugin as any).settings = mergeSettings();
+
+  await (plugin as any).processDocumentTargets([
+    {
+      alt: "demo",
+      blockId: "img-1",
+      displayHeight: 10,
+      displayWidth: 10,
+      src: "/assets/demo.png",
+    },
+  ], "add-border", "replace");
+
+  expect(relinkAsset).toHaveBeenCalledWith(
+    "assets/demo.png",
+    "assets/demo.quickedit-add-border-1.webp",
+  );
+});
+
+test("processDocumentTargets falls back to updateMarkdownBlock when relinkAsset is unsupported", async () => {
+  const imageWorkflow = await import("../src/services/image-workflow.ts");
+  const kernel = await import("../src/services/kernel.ts");
+  kernel.setRelinkSupportStateForTesting(false);
+
+  vi.spyOn(imageWorkflow, "addBorderToImageTarget").mockResolvedValue({
+    commandId: "add-border",
+    commandLabel: "添加图像边框",
+    fileName: "demo.quickedit-add-border-1.webp",
+    original: {
+      bytes: 100,
+      colorDepth: 24,
+      format: "png",
+      height: 10,
+      mimeType: "image/png",
+      width: 10,
+    },
+    output: {
+      blob: new Blob(["bordered"], { type: "image/webp" }),
+      bytes: 120,
+      format: "webp",
+      height: 14,
+      width: 14,
+    },
+  });
+  vi.spyOn(kernel, "uploadAsset").mockResolvedValue("/assets/demo.quickedit-add-border-1.webp");
   vi.spyOn(kernel, "getBlockMarkdown").mockResolvedValue("![demo](/assets/demo.png)");
   const updateMarkdownBlock = vi.spyOn(kernel, "updateMarkdownBlock").mockResolvedValue(undefined);
 
@@ -1051,8 +1107,12 @@ test("processDocumentTargets skips images matching skip conditions and reports s
   });
 
   const uploadAsset = vi.spyOn(kernel, "uploadAsset").mockResolvedValue("/assets/normal.webp");
-  const updateMarkdownBlock = vi.spyOn(kernel, "updateMarkdownBlock").mockResolvedValue(undefined);
-  vi.spyOn(kernel, "getBlockMarkdown").mockResolvedValue("![normal](/assets/normal.png)");
+  const relinkAsset = vi.spyOn(kernel.kernelApi, "relinkAsset").mockResolvedValue({
+    dryRun: false,
+    references: [],
+    skippedNotebooks: [],
+    updated: 1,
+  });
 
   const { default: SiyuanImageQuickEditPlugin } = await import("../src/index.ts");
   const plugin = new SiyuanImageQuickEditPlugin();
@@ -1082,8 +1142,8 @@ test("processDocumentTargets skips images matching skip conditions and reports s
   expect(result.savedBytes).toBe(600 * 1024);
 
   expect(uploadAsset).toHaveBeenCalledTimes(1);
-  expect(updateMarkdownBlock).toHaveBeenCalledTimes(1);
-  expect(updateMarkdownBlock).toHaveBeenCalledWith("img-normal", expect.anything());
+  expect(relinkAsset).toHaveBeenCalledTimes(1);
+  expect(relinkAsset).toHaveBeenCalledWith("assets/normal.png", "assets/normal.webp");
 });
 
 
